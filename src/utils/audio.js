@@ -150,6 +150,11 @@ class SoundManager {
     } catch (e) {}
   }
 
+  // Start Horn (used for race start)
+  playStartHorn() {
+    this.playBattleStart();
+  }
+
   // Laser shot (strictly throttled to max 6 shots/sec to prevent audio buffer spikes)
   playLaser() {
     if (this.isMuted) return;
@@ -213,6 +218,37 @@ class SoundManager {
     } catch (e) {}
   }
 
+  // Punch impact sound (throttled to max 7 punches/sec)
+  playPunch() {
+    if (this.isMuted) return;
+    const now = performance.now();
+    if (!this.lastPunchTime) this.lastPunchTime = 0;
+    if (now - this.lastPunchTime < 130) return;
+    this.lastPunchTime = now;
+
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(280, t);
+      osc.frequency.exponentialRampToValueAtTime(45, t + 0.09);
+
+      gain.gain.setValueAtTime(0.24, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.095);
+    } catch (e) {}
+  }
+
   // Victory fanfare
   playVictory() {
     if (this.isMuted) return;
@@ -246,6 +282,71 @@ class SoundManager {
 
         t += note.d * 0.9;
       });
+    } catch (e) {}
+  }
+
+  // Cinematic door shutter drop sound (heavy descent + latch over ~1.4s)
+  playDoorDrop() {
+    if (this.isMuted) return;
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+      // Low descending whoosh
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, t);
+      osc.frequency.exponentialRampToValueAtTime(40, t + 1.25);
+
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.35);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.35);
+
+      // Metallic impact thump at bottom when door shuts at 1.3s
+      const impactOsc = this.ctx.createOscillator();
+      const impactGain = this.ctx.createGain();
+      impactOsc.type = 'triangle';
+      impactOsc.frequency.setValueAtTime(115, t + 1.3);
+      impactOsc.frequency.exponentialRampToValueAtTime(28, t + 1.65);
+
+      impactGain.gain.setValueAtTime(0.32, t + 1.3);
+      impactGain.gain.exponentialRampToValueAtTime(0.001, t + 1.65);
+
+      impactOsc.connect(impactGain);
+      impactGain.connect(this.ctx.destination);
+      impactOsc.start(t + 1.3);
+      impactOsc.stop(t + 1.65);
+    } catch (e) {}
+  }
+
+  // Pneumatic / cyber door sliding open sound (over ~2.6s)
+  playDoorOpen() {
+    if (this.isMuted) return;
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(90, t);
+      osc.frequency.linearRampToValueAtTime(320, t + 2.2);
+
+      gain.gain.setValueAtTime(0.16, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 2.5);
     } catch (e) {}
   }
 }

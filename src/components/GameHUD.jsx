@@ -12,6 +12,7 @@ export default function GameHUD({
   totalFoxes = 0,
   isRapidFire = false,
   isDuelMode = false,
+  isDoorAnimating = false,
   isCompact = false // True in fullscreen mode
 }) {
   const isLobby = phase === 'LOBBY';
@@ -20,7 +21,7 @@ export default function GameHUD({
   // Sound beep when in last 3 seconds of lobby
   const lastBeepRef = React.useRef(-1);
   useEffect(() => {
-    if (isLobby) {
+    if (isLobby && !isDoorAnimating) {
       const remaining = Math.max(0, lobbyDuration - lobbyTime);
       const wholeSec = Math.ceil(remaining);
       if (wholeSec <= 3 && wholeSec >= 1 && wholeSec !== lastBeepRef.current) {
@@ -30,7 +31,7 @@ export default function GameHUD({
     } else {
       lastBeepRef.current = -1;
     }
-  }, [isLobby, lobbyTime, lobbyDuration]);
+  }, [isLobby, lobbyTime, lobbyDuration, isDoorAnimating]);
 
   if (phase === 'IDLE') return null;
 
@@ -60,9 +61,9 @@ export default function GameHUD({
         }`}>
           {/* Phase Dot & Tag */}
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${isLobby ? 'bg-cyan-400' : 'bg-red-500 animate-ping'}`} />
-            <span className={`text-[11px] font-black uppercase tracking-wider ${isLobby ? 'text-cyan-300' : 'text-red-300'}`}>
-              {isLobby ? `SẢNH (${lobbyDuration}S)` : `CHIẾN ĐẤU (${battleDuration}S)`}
+            <span className={`w-2.5 h-2.5 rounded-full ${isDoorAnimating ? 'bg-amber-400 animate-ping' : isLobby ? 'bg-cyan-400' : 'bg-red-500 animate-ping'}`} />
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isDoorAnimating ? 'text-amber-300 animate-pulse' : isLobby ? 'text-cyan-300' : 'text-red-300'}`}>
+              {isDoorAnimating ? 'ĐANG MỞ CỬA...' : isLobby ? `SẢNH (${lobbyDuration}S)` : `CHIẾN ĐẤU (${battleDuration}S)`}
             </span>
           </div>
 
@@ -161,7 +162,11 @@ export default function GameHUD({
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                   : 'bg-red-500/20 text-red-300 border border-red-500/40'
               }`}>
-                {isLobby ? `GIAI ĐOẠN 1: SẢNH CHỜ (${lobbyDuration}S)` : `GIAI ĐOẠN 2: CHIẾN ĐẤU (${battleDuration}S)`}
+                {isDoorAnimating
+                  ? 'GIAI ĐOẠN 1: ĐANG MỞ CỬA SẢNH CHỜ...'
+                  : isLobby
+                  ? `GIAI ĐOẠN 1: SẢNH CHỜ (${lobbyDuration}S)`
+                  : `GIAI ĐOẠN 2: CHIẾN ĐẤU (${battleDuration}S)`}
               </span>
 
               {isDuelMode && (

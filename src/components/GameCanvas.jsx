@@ -82,6 +82,10 @@ export default function GameCanvas({
   const lobbyBgImageRef = useRef(null);
   const battleBgImageRef = useRef(null);
 
+  // Dynamic Camera Zoom & On-Map Celebration Particles
+  const cameraRef = useRef({ scale: 1.0, x: 0, y: 0 });
+  const celebrationParticlesRef = useRef([]);
+
   // Stable callback refs to ensure the render loop never restarts
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onBattleFinishRef = useRef(onBattleFinish);
@@ -207,7 +211,8 @@ export default function GameCanvas({
             aliveCount: engine.aliveCount,
             totalFoxes: engine.foxes.length,
             isRapidFire: engine.isRapidFire,
-            isDuelMode: engine.isDuelMode
+            isDuelMode: engine.isDuelMode,
+            isDoorAnimating: Boolean(engine.isDoorAnimating)
           });
         }
 
@@ -226,14 +231,95 @@ export default function GameCanvas({
       const w = curWidth;
       const h = curHeight;
       const dpr = curDpr;
+      const phase = engine.phase;
+      const foxes = engine.foxes;
 
+      // =====================================================================
+      // DYNAMIC SMOOTH CAMERA ZOOM & TRACKING (2/3 time, 1/3 time, <=5 foxes, Winner 3s)
+      // =====================================================================
+      let targetScale = 1.0;
+      let targetFocusX = w / 2;
+      let targetFocusY = h / 2;
+
+      if (phase === 'BATTLE') {
+        if (engine.isCelebrating && engine.winner) {
+          // 3s On-map Winner Celebration: Zoom in close to champion (2.15x)
+          targetScale = 2.15;
+          targetFocusX = engine.winner.x;
+          targetFocusY = engine.winner.y;
+        } else if (engine.aliveCount <= 5) {
+          // <= 5 Foxes or 1v1 duel: Dynamic close combat zoom (1.68x)
+          targetScale = 1.68;
+          let sumX = 0, sumY = 0, cnt = 0;
+          for (let i = 0; i < foxes.length; i++) {
+            if (foxes[i].isAlive) {
+              sumX += foxes[i].x;
+              sumY += foxes[i].y;
+              cnt++;
+            }
+          }
+          if (cnt > 0) {
+            targetFocusX = sumX / cnt;
+            targetFocusY = sumY / cnt;
+          }
+        } else {
+          // Progress-based smooth zoom:
+          const battleProgress = engine.battleTime / Math.max(1, engine.battleDuration);
+          if (battleProgress >= 0.667) {
+            // Còn tầm 1/3 thời gian: zoom ~1.38x
+            targetScale = 1.38;
+          } else if (battleProgress >= 0.333) {
+            // Còn tầm 2/3 thời gian: zoom ~1.18x
+            targetScale = 1.18;
+          } else {
+            targetScale = 1.0;
+          }
+
+          // Bias target focus towards center of mass of living foxes
+          let sumX = 0, sumY = 0, cnt = 0;
+          const sampleCount = Math.min(25, foxes.length);
+          for (let i = 0; i < sampleCount; i++) {
+            if (foxes[i].isAlive) {
+              sumX += foxes[i].x;
+              sumY += foxes[i].y;
+              cnt++;
+            }
+          }
+          if (cnt > 0) {
+            targetFocusX = (w / 2) * 0.4 + (sumX / cnt) * 0.6;
+            targetFocusY = (h / 2) * 0.4 + (sumY / cnt) * 0.6;
+          }
+        }
+      }
+
+      // Clamp target focus point so camera viewport NEVER exposes void outside [0, 0, w, h]
+      const halfW = (w / 2) / Math.max(1.0, targetScale);
+      const halfH = (h / 2) / Math.max(1.0, targetScale);
+      const clampedTargetX = Math.max(halfW, Math.min(w - halfW, targetFocusX));
+      const clampedTargetY = Math.max(halfH, Math.min(h - halfH, targetFocusY));
+
+      // Frame-rate independent smooth camera lerp
+      const cam = cameraRef.current;
+      const lerpSpeed = Math.min(1.0, dt * 2.8);
+      cam.scale += (targetScale - cam.scale) * lerpSpeed;
+      cam.x += (clampedTargetX - cam.x) * lerpSpeed;
+      cam.y += (clampedTargetY - cam.y) * lerpSpeed;
+
+      // Base Canvas DPR Scale
       ctx.save();
       ctx.scale(dpr, dpr);
+
+      // =====================================================================
+      // WORLD SPACE TRANSFORM (ZOOMED & PANNED IN HIGH DEFINITION)
+      // =====================================================================
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(cam.scale, cam.scale);
+      ctx.translate(-cam.x, -cam.y);
 
       // 3. Draw Background with Lobby -> Battlefield crossfade & 3s blur transition
       const lobbyImg = lobbyBgImageRef.current;
       const battleImg = battleBgImageRef.current;
-      const phase = engine.phase;
       const isLobby = phase === 'LOBBY' || phase === 'IDLE';
       const isBattle = phase === 'BATTLE' || phase === 'FINISHED';
 
@@ -301,46 +387,50 @@ export default function GameCanvas({
       }
       ctx.stroke();
 
-      // 4. Draw Laser Bullets
-      const bullets = engine.bullets;
-      if (bullets.length > 0) {
-        ctx.lineCap = 'round';
+      // 4. Draw Melee Punch Clash Effects (POW!, BAM!, sparks, starbursts)
+      const clashes = engine.clashEffects || [];
+      for (let c = 0; c < clashes.length; c++) {
+        const cl = clashes[c];
+        if (cl.life > 0) {
+          const progress = 1 - cl.life / cl.maxLife;
+          const alpha = Math.max(0, cl.life / cl.maxLife);
+          const currentSize = cl.size * (1 + progress * 0.6);
 
-        for (let b = 0; b < bullets.length; b++) {
-          const bul = bullets[b];
-          const tailLen = bul.isMegaLaser ? 0.055 : (engine.isRapidFire ? 0.040 : 0.035);
-          const tailX = bul.x - bul.vx * tailLen;
-          const tailY = bul.y - bul.vy * tailLen;
+          ctx.save();
+          ctx.translate(cl.x, cl.y);
+          ctx.globalAlpha = alpha;
 
+          // Starburst impact background
+          ctx.fillStyle = cl.color || '#facc15';
           ctx.beginPath();
-          ctx.moveTo(tailX, tailY);
-          ctx.lineTo(bul.x, bul.y);
-
-          if (bul.isMegaLaser) {
-            ctx.lineWidth = 5.5;
-            ctx.strokeStyle = '#facc15';
-            ctx.stroke();
-            ctx.lineWidth = 2.5;
-            ctx.strokeStyle = '#ffffff';
-            ctx.stroke();
-          } else if (engine.isRapidFire) {
-            ctx.lineWidth = 3.0;
-            ctx.strokeStyle = '#f43f5e';
-            ctx.stroke();
-          } else {
-            ctx.lineWidth = 2.4;
-            ctx.strokeStyle = '#f97316';
-            ctx.stroke();
+          const spikes = 8;
+          const outerR = currentSize;
+          const innerR = currentSize * 0.45;
+          for (let s = 0; s < spikes * 2; s++) {
+            const r = (s % 2 === 0) ? outerR : innerR;
+            const a = (s * Math.PI) / spikes;
+            if (s === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+            else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
           }
-
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(bul.x, bul.y, bul.isMegaLaser ? 3.5 : 2.0, 0, Math.PI * 2);
+          ctx.closePath();
           ctx.fill();
+
+          // Comic text label ("BỐP!", "BAM!", "POW!", "K.O!")
+          ctx.font = '900 13px "Orbitron", Impact, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#020617';
+          ctx.strokeText(cl.text, 0, -2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(cl.text, 0, -2);
+
+          ctx.restore();
         }
       }
+      ctx.globalAlpha = 1.0;
 
-      // 5. Draw Explosions
+      // 5. Draw Explosions / KO Particles
       const explosions = engine.explosions;
       for (let e = 0; e < explosions.length; e++) {
         const exp = explosions[e];
@@ -358,13 +448,10 @@ export default function GameCanvas({
       }
       ctx.globalAlpha = 1.0;
 
-      // 6. Draw Foxes (Sprites + HP Bars + Name Tags)
+      // 6. Draw Foxes (Sprites + Clean Name Tags - NO HEALTH BARS!)
       const foxImg = foxImageRef.current || fallbackFox;
-      const foxes = engine.foxes;
       const foxW = 38;
       const foxH = 28;
-      const barW = 32;
-      const barH = 3.5;
 
       ctx.font = 'bold 9.5px "Outfit", system-ui, sans-serif';
       ctx.textAlign = 'center';
@@ -389,7 +476,7 @@ export default function GameCanvas({
         ctx.translate(drawX, drawY);
 
         // Sole Survivor Aura Ring
-        if (engine.aliveCount === 1) {
+        if (engine.aliveCount === 1 || engine.isCelebrating) {
           ctx.strokeStyle = '#facc15';
           ctx.lineWidth = 3.2;
           ctx.beginPath();
@@ -412,63 +499,143 @@ export default function GameCanvas({
           ctx.scale(-1, 1);
         }
 
-        // Aerodynamic banking tilt
-        const tilt = Math.max(-0.25, Math.min(0.25, (f.vy / (f.speed || 1)) * 0.35));
+        // Aerodynamic banking tilt & punch lunge
+        let tilt = f.isDropping
+          ? (f.tilt || 0)
+          : Math.max(-0.25, Math.min(0.25, (f.vy / (f.speed || 1)) * 0.35));
+        if (f.punchTimer > 0) {
+          tilt += (Math.random() - 0.5) * 0.3; // Punch vibration
+        }
         ctx.rotate(tilt);
+
+        // Falling drop wind speed lines behind fox
+        if (f.isDropping) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, -foxH / 2);
+          ctx.lineTo(0, -foxH / 2 - 18);
+          ctx.moveTo(-7, -foxH / 2 + 3);
+          ctx.lineTo(-7, -foxH / 2 - 12);
+          ctx.moveTo(7, -foxH / 2 + 3);
+          ctx.lineTo(7, -foxH / 2 - 12);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Cute landing squash & stretch bounce
+        if (f.bounceTimer > 0) {
+          const bounceProg = f.bounceTimer / 0.22;
+          const squash = Math.sin(bounceProg * Math.PI) * 0.22;
+          ctx.scale(1 + squash, 1 - squash);
+        }
 
         // Draw Fox Image centered
         ctx.drawImage(foxImg, -foxW / 2, -foxH / 2, foxW, foxH);
 
-        // Hit flash highlight
-        if (f.hitFlashTimer > 0) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(-foxW / 2, -foxH / 2, foxW, foxH);
-        }
-
         ctx.restore();
 
-        // Draw HP Bar
-        const barX = drawX - barW / 2;
-        const barY = drawY - foxH / 2 - 6;
-
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(barX, barY, barW, barH);
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 0.8;
-        ctx.strokeRect(barX, barY, barW, barH);
-
-        const hpRatio = Math.max(0, f.hp / f.maxHp);
-        const curW = barW * hpRatio;
-        if (curW > 0) {
-          ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : hpRatio > 0.25 ? '#eab308' : '#ef4444';
-          ctx.fillRect(barX, barY, curW, barH);
-        }
-
-        // Draw Name Tag
+        // Draw Name Tag directly above the Fox (NO HEALTH BAR!)
         let cleanName = (f.name || '').replace(/^[#\d\.\:\-\s]+/, '').trim();
         let shortName = cleanName || `Cáo ${f.id}`;
         if (shortName.length > 10) shortName = shortName.slice(0, 9) + '…';
 
-        const label = engine.aliveCount === 1
+        const label = (engine.aliveCount === 1 || engine.isCelebrating)
           ? `🏆 ${f.id}.${shortName} (WINNER)`
           : engine.isDuelMode && f.isFinalist
           ? `👑 ${f.id}.${shortName}`
           : `${f.id}.${shortName}`;
 
+        const tagY = drawY - foxH / 2 - 4;
+
         if (isLowCount) {
-          ctx.strokeText(label, drawX, barY - 1.5);
+          ctx.strokeText(label, drawX, tagY);
         }
 
-        ctx.fillStyle = engine.aliveCount === 1
+        ctx.fillStyle = (engine.aliveCount === 1 || engine.isCelebrating)
           ? '#fef08a'
           : engine.isDuelMode && f.isFinalist
           ? '#fde047'
           : '#ffffff';
-        ctx.fillText(label, drawX, barY - 1.5);
+        ctx.fillText(label, drawX, tagY);
       }
 
-      // 7. Last 3 Seconds: Big Holographic Countdown Display
+      // 7. On-Map Winner Celebration (3 Seconds of Glorious Fireworks & Sunburst on the Map!)
+      if (engine.isCelebrating && engine.winner) {
+        const winner = engine.winner;
+
+        // Spawn on-map celebration fireworks & confetti particles
+        const particles = celebrationParticlesRef.current;
+        if (particles.length < 85) {
+          particles.push({
+            x: winner.x + (Math.random() - 0.5) * 50,
+            y: winner.y - 10 + (Math.random() - 0.5) * 40,
+            vx: (Math.random() - 0.5) * 120,
+            vy: -70 - Math.random() * 80,
+            size: 2.2 + Math.random() * 2.8,
+            color: ['#facc15', '#f59e0b', '#fbbf24', '#ef4444', '#38bdf8', '#ffffff'][Math.floor(Math.random() * 6)],
+            life: 0.75 + Math.random() * 0.5,
+            maxLife: 1.2
+          });
+        }
+
+        for (let p = particles.length - 1; p >= 0; p--) {
+          const pt = particles[p];
+          pt.x += pt.vx * dt;
+          pt.y += pt.vy * dt;
+          pt.vy += 85 * dt;
+          pt.life -= dt;
+          if (pt.life <= 0) {
+            particles.splice(p, 1);
+            continue;
+          }
+          const alpha = Math.max(0, pt.life / pt.maxLife);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = pt.color;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Spinning golden sunburst rays around champion
+        ctx.save();
+        ctx.translate(winner.x, winner.y);
+        const rayCount = 14;
+        const spinA = now * 0.002;
+        for (let r = 0; r < rayCount; r++) {
+          const a = spinA + (r * Math.PI * 2) / rayCount;
+          ctx.fillStyle = r % 2 === 0 ? 'rgba(250, 204, 21, 0.16)' : 'rgba(249, 115, 22, 0.08)';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, 95, a - 0.12, a + 0.12);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Floating golden crown badge above winner
+        ctx.font = '900 13px "Orbitron", Impact, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = '#020617';
+        ctx.strokeText('👑 QUÁN QUÂN BRAWL 👑', 0, -32);
+        ctx.fillStyle = '#fde047';
+        ctx.fillText('👑 QUÁN QUÂN BRAWL 👑', 0, -32);
+
+        ctx.restore();
+      }
+
+      // Restore World Transform
+      ctx.restore();
+
+      // =====================================================================
+      // SCREEN-SPACE OVERLAYS (STATIONARY, UNZOOMED ON SCREEN)
+      // =====================================================================
+
+      // 8. Last 3 Seconds of Lobby: Big Holographic Countdown Display
       if (phase === 'LOBBY' && isLast3sLobby && lobbyTimeLeft > 0) {
         const sec = Math.ceil(lobbyTimeLeft);
         const subSec = lobbyTimeLeft % 1;
@@ -521,9 +688,9 @@ export default function GameCanvas({
         ctx.restore();
       }
 
-      // 8. Battle Start Flash Banner (first 1.2s of Battle)
-      if (phase === 'BATTLE' && engine.battleTime <= 1.2) {
-        const progress = engine.battleTime / 1.2;
+      // 9. Battle Start Flash Banner (During startDelay = 1.5s while foxes roam peacefully)
+      if (phase === 'BATTLE' && engine.battleTime <= 1.5) {
+        const progress = engine.battleTime / 1.5;
         const alpha = Math.max(0, 1.0 - progress);
 
         ctx.save();
@@ -546,7 +713,202 @@ export default function GameCanvas({
         ctx.font = 'bold 15px "Outfit", system-ui, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.shadowBlur = 10;
-        ctx.fillText('SINH TỒN 400 CÁO BAY - TỰ ĐỘNG KHAI HỎA!', cx, cy + 38);
+        ctx.fillText('CHUẨN BỊ... BẮT ĐẦU LAO VÀO ĐẤM NHAU!', cx, cy + 38);
+
+        ctx.restore();
+      }
+
+      // 10. Cinematic Black Screen Shutter Drop & Split Opening Door Effect
+      if (engine.isDoorAnimating && (engine.doorPhase === 'DROPPING' || engine.doorPhase === 'OPENING')) {
+        ctx.save();
+
+        if (engine.doorPhase === 'DROPPING') {
+          const progress = Math.min(1.0, engine.doorTimer / (engine.doorDropDuration || 1.4));
+          // Ease-out cubic for realistic heavy drop
+          const ease = 1 - Math.pow(1 - progress, 3);
+          const shutterY = -h + ease * h;
+
+          ctx.save();
+          ctx.translate(0, shutterY);
+
+          // Dark obsidian metal gradient
+          const metalGrad = ctx.createLinearGradient(0, 0, 0, h);
+          metalGrad.addColorStop(0, '#020408');
+          metalGrad.addColorStop(0.3, '#0b0f1a');
+          metalGrad.addColorStop(0.7, '#080c14');
+          metalGrad.addColorStop(1, '#020408');
+          ctx.fillStyle = metalGrad;
+          ctx.fillRect(0, 0, w, h);
+
+          // Horizontal metal panels / grooves
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+          ctx.lineWidth = 1.5;
+          const grooveStep = 45;
+          ctx.beginPath();
+          for (let gy = grooveStep; gy < h; gy += grooveStep) {
+            ctx.moveTo(0, gy);
+            ctx.lineTo(w, gy);
+          }
+          ctx.stroke();
+
+          // Center seam line where the door will split
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(w / 2, 0);
+          ctx.lineTo(w / 2, h);
+          ctx.stroke();
+
+          // Bottom bumper edge with warning stripes & neon glow
+          const bumperH = 14;
+          const bumperY = h - bumperH;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, bumperY, w, bumperH);
+
+          // Bottom edge glowing neon laser strip
+          ctx.strokeStyle = '#f97316';
+          ctx.lineWidth = 3;
+          ctx.shadowColor = 'rgba(249, 115, 22, 0.9)';
+          ctx.shadowBlur = 15;
+          ctx.beginPath();
+          ctx.moveTo(0, h - 1);
+          ctx.lineTo(w, h - 1);
+          ctx.stroke();
+
+          // Center Door Shield / Vault Emblem
+          const cx = w / 2;
+          const cy = h / 2;
+          ctx.save();
+          ctx.shadowColor = 'rgba(249, 115, 22, 0.7)';
+          ctx.shadowBlur = 20;
+
+          // Emblem circle background
+          ctx.fillStyle = '#090d16';
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 54, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Inner ring
+          ctx.strokeStyle = 'rgba(251, 146, 60, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 46, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Text
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = '900 16px "Orbitron", Impact, sans-serif';
+          ctx.fillStyle = '#fb923c';
+          ctx.fillText('ARENA GATES', cx, cy - 6);
+          ctx.font = 'bold 9.5px "Outfit", sans-serif';
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillText('CHUẨN BỊ MỞ CỬA', cx, cy + 14);
+
+          ctx.restore();
+          ctx.restore();
+        } else if (engine.doorPhase === 'OPENING') {
+          const progress = Math.min(1.0, engine.doorTimer / (engine.doorOpenDuration || 2.6));
+          // Ease-in-out quadratic for smooth, weighty split
+          const ease = progress < 0.5
+            ? 2 * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+          const slideDist = ease * (w / 2 + 30);
+          const leftDoorX = -slideDist;
+          const rightDoorX = w / 2 + slideDist;
+          const doorWidth = w / 2;
+
+          // 1. Draw Golden Light Flare emerging from the widening center gap
+          const gapLeft = w / 2 - slideDist;
+          const gapRight = w / 2 + slideDist;
+          const gapW = gapRight - gapLeft;
+          if (gapW > 0 && progress < 0.95) {
+            ctx.save();
+            const flareAlpha = Math.max(0, (1 - progress) * 0.45);
+            const flareGrad = ctx.createLinearGradient(gapLeft, 0, gapRight, 0);
+            flareGrad.addColorStop(0, 'rgba(251, 146, 60, 0)');
+            flareGrad.addColorStop(0.5, `rgba(255, 240, 200, ${flareAlpha})`);
+            flareGrad.addColorStop(1, 'rgba(251, 146, 60, 0)');
+            ctx.fillStyle = flareGrad;
+            ctx.fillRect(gapLeft, 0, gapW, h);
+            ctx.restore();
+          }
+
+          // Function to draw one half of the metallic door
+          const drawDoorPanel = (x, isLeft) => {
+            ctx.save();
+            ctx.translate(x, 0);
+
+            // Metallic dark panel gradient
+            const metalGrad = ctx.createLinearGradient(0, 0, 0, h);
+            metalGrad.addColorStop(0, '#020408');
+            metalGrad.addColorStop(0.3, '#0b0f1a');
+            metalGrad.addColorStop(0.7, '#080c14');
+            metalGrad.addColorStop(1, '#020408');
+            ctx.fillStyle = metalGrad;
+            ctx.fillRect(0, 0, doorWidth, h);
+
+            // Horizontal reinforcing grooves
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1.5;
+            const grooveStep = 45;
+            ctx.beginPath();
+            for (let gy = grooveStep; gy < h; gy += grooveStep) {
+              ctx.moveTo(0, gy);
+              ctx.lineTo(doorWidth, gy);
+            }
+            ctx.stroke();
+
+            // Bottom bumper edge
+            const bumperH = 14;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, h - bumperH, doorWidth, bumperH);
+
+            // Bottom edge neon laser strip
+            ctx.strokeStyle = '#ea580c';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(0, h - 1);
+            ctx.lineTo(doorWidth, h - 1);
+            ctx.stroke();
+
+            // Center vertical seam edge neon strip
+            const seamX = isLeft ? doorWidth : 0;
+            ctx.strokeStyle = '#f97316';
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = 'rgba(249, 115, 22, 0.95)';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.moveTo(seamX, 0);
+            ctx.lineTo(seamX, h);
+            ctx.stroke();
+
+            // Halved circular emblem on the seam
+            ctx.save();
+            ctx.beginPath();
+            if (isLeft) {
+              ctx.arc(doorWidth, h / 2, 54, -Math.PI / 2, Math.PI / 2);
+            } else {
+              ctx.arc(0, h / 2, 54, Math.PI / 2, -Math.PI / 2);
+            }
+            ctx.fillStyle = '#090d16';
+            ctx.strokeStyle = '#ea580c';
+            ctx.lineWidth = 3;
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.restore();
+          };
+
+          // Draw Left and Right Doors
+          drawDoorPanel(leftDoorX, true);
+          drawDoorPanel(rightDoorX, false);
+        }
 
         ctx.restore();
       }

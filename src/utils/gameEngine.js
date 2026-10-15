@@ -1,6 +1,6 @@
-// gameEngine.js - Ultra-optimized Battle Royale Simulation Engine
-// Supports configurable Lobby & Battle durations (3s - 60s)
-// Features: Memory cleanup every 30 kills, <=150 rapid fire & flight speed boost, 0.2s single winner, Top 5 ranking
+// gameEngine.js - Ultra-optimized Melee Brawl Battle Royale Simulation Engine
+// Mechanics: Foxes charge directly into each other to punch/brawl, random 50/50 winner/loser on clash, NO HP bars!
+// Features: Memory cleanup every 30 kills, dynamic 1v1 duel flurry punches, 0.2s final KO, Top 5 ranking
 
 import { soundFX } from './audio';
 
@@ -8,8 +8,9 @@ export class GameEngine {
   constructor() {
     this.foxes = [];
     this.foxMap = new Map();
-    this.bullets = [];
+    this.clashEffects = []; // Comic punch/clash effects (POW!, BAM!, sparks)
     this.explosions = [];
+    this.bullets = []; // empty array for backwards compatibility
     this.playerList = [];
 
     // Configurable Durations (3s to 60s, default 10s)
@@ -27,8 +28,6 @@ export class GameEngine {
     this.mapWidth = 1400;
     this.mapHeight = 800;
 
-    this.bulletIdCounter = 0;
-
     // Memory Cleanup Tracking (every 30 eliminations)
     this.eliminationCount = 0;
     this.lastCleanupEliminationCount = 0;
@@ -38,14 +37,27 @@ export class GameEngine {
     this.lastBeepSecond = -1;
 
     // Dynamic Combat Status
-    this.isRapidFire = false; // Triggered when aliveCount <= 150
+    this.isRapidFire = false; // Used when aliveCount <= 150 (speed boost)
     this.isDuelMode = false;  // Triggered when aliveCount === 2
     this.finalistIds = [];
     this.championId = null;
-    this.finalShotFired = false;
+    this.finalPunchLanded = false;
+
+    // Start Delay & Winner On-Map Celebration
+    this.startDelay = 1.5; // Wait 1.5s after countdown ends and start banner fades before brawling
+    this.celebrationDuration = 3.0; // 3 seconds on-map winner celebration before opening form
+    this.celebrationTime = 0;
+    this.isCelebrating = false;
+
+    // Door Opening & Falling Foxes Intro Mechanics (Total 4.0s: 1.4s Drop + 2.6s Split Open)
+    this.doorPhase = 'INACTIVE'; // 'INACTIVE' | 'DROPPING' | 'OPENING' | 'DONE'
+    this.doorTimer = 0;
+    this.doorDropDuration = 1.4; // 1.4s to drop down
+    this.doorOpenDuration = 2.6; // 2.6s to slide open to 2 sides (total 4.0s)
+    this.isDoorAnimating = false;
   }
 
-  // Set user-configured flight speed scale (0.3x to 2.5x)
+  // Set user-configured flight speed scale (0.3x to 3.0x)
   setSpeedScale(scale) {
     if (typeof scale === 'number' && scale >= 0.2 && scale <= 3.0) {
       this.speedScale = scale;
@@ -64,24 +76,18 @@ export class GameEngine {
 
   // Memory cleanup every 30 kills to ensure zero memory leaks and peak 60 FPS
   performMemoryCleanup() {
-    // 1. Remove expired bullets
-    this.bullets = this.bullets.filter(b => b.lifeTime > 0.02);
-
-    // 2. Remove dead explosions
+    this.clashEffects = this.clashEffects.filter(c => c.life > 0.02);
     this.explosions = this.explosions.filter(e => e.life > 0.02);
+    this.bullets = [];
 
-    // 3. Compact transient properties on eliminated foxes
     for (let i = 0; i < this.foxes.length; i++) {
       const f = this.foxes[i];
       if (!f.isAlive) {
         f.vx = 0;
         f.vy = 0;
-        f.hitFlashTimer = 0;
+        f.punchTimer = 0;
+        f.targetId = null;
       }
-    }
-
-    if (this.bullets.length === 0) {
-      this.bulletIdCounter = 0;
     }
   }
 
@@ -94,8 +100,9 @@ export class GameEngine {
     this.phase = 'IDLE';
     this.lobbyTime = 0;
     this.battleTime = 0;
-    this.bullets = [];
+    this.clashEffects = [];
     this.explosions = [];
+    this.bullets = [];
     this.winner = null;
     this.top5 = [];
     this.eliminationCount = 0;
@@ -104,7 +111,9 @@ export class GameEngine {
     this.isDuelMode = false;
     this.finalistIds = [];
     this.championId = null;
-    this.finalShotFired = false;
+    this.finalPunchLanded = false;
+    this.celebrationTime = 0;
+    this.isCelebrating = false;
 
     const count = playerList.length;
     this.aliveCount = count;
@@ -126,8 +135,7 @@ export class GameEngine {
       const y = padTop + Math.random() * spawnH;
 
       const angle = Math.random() * Math.PI * 2;
-      // Flight speed calibrated slightly faster as requested (28 - 42 px/s)
-      const baseSpeed = 28 + Math.random() * 14;
+      const baseSpeed = 32 + Math.random() * 16;
 
       const fox = {
         id: player.id,
@@ -143,20 +151,15 @@ export class GameEngine {
         turnTimer: Math.random() * 2,
         bobPhase: Math.random() * Math.PI * 2,
 
-        // Combat attributes
-        maxHp: 100,
-        hp: 100,
+        // Melee brawl attributes (NO HP BARS - random win/lose on clash)
         isAlive: true,
         eliminatedAt: null,
         kills: 0,
-        damageDealt: 0,
-        hitFlashTimer: 0,
+        punchTimer: 0,
+        brawlCooldown: 0,
+        targetId: null,
         isFinalist: false,
-
-        // Attack pacing
-        attackRange: 340 + Math.random() * 120,
-        fireCooldown: 0.8 + Math.random() * 0.8,
-        fireTimer: 0.2 + Math.random() * 1.0
+        isCharging: false
       };
 
       this.foxMap.set(fox.id, fox);
@@ -169,8 +172,11 @@ export class GameEngine {
     this.phase = 'LOBBY';
     this.lobbyTime = 0;
     this.battleTime = 0;
-    this.bullets = [];
+    this.celebrationTime = 0;
+    this.isCelebrating = false;
+    this.clashEffects = [];
     this.explosions = [];
+    this.bullets = [];
     this.winner = null;
     this.top5 = [];
     this.eliminationCount = 0;
@@ -180,23 +186,48 @@ export class GameEngine {
     this.isDuelMode = false;
     this.finalistIds = [];
     this.championId = null;
-    this.finalShotFired = false;
-
+    this.finalPunchLanded = false;
     this.lastBeepSecond = -1;
+
+    // Trigger Door Shutter Drop -> Split Open animation
+    this.doorPhase = 'DROPPING';
+    this.doorTimer = 0;
+    this.isDoorAnimating = true;
+    soundFX.playDoorDrop();
+
+    const padSide = 40;
+    const padTop = 80;
+    const padBottom = 40;
+    const spawnW = Math.max(200, this.mapWidth - padSide * 2);
+    const spawnH = Math.max(200, this.mapHeight - padTop - padBottom);
+
     this.foxes.forEach((fox) => {
-      fox.baseSpeed = 28 + Math.random() * 14;
+      fox.baseSpeed = 32 + Math.random() * 16;
       fox.speed = fox.baseSpeed;
-      fox.hp = fox.maxHp;
       fox.isAlive = true;
       fox.eliminatedAt = null;
       fox.kills = 0;
-      fox.damageDealt = 0;
-      fox.hitFlashTimer = 0;
+      fox.punchTimer = 0;
+      fox.brawlCooldown = 0;
+      fox.targetId = null;
       fox.isFinalist = false;
-      fox.fireTimer = 0.2 + Math.random() * 0.9;
+      fox.isCharging = false;
+
+      // Target position inside lobby
+      fox.targetX = padSide + Math.random() * spawnW;
+      fox.targetY = padTop + Math.random() * spawnH;
+
+      // Start position: drop from above the screen!
+      fox.x = fox.targetX;
+      fox.y = -70 - Math.random() * 300;
+      fox.isDropping = true;
+      // Stagger drop as the door opens from 1.4s to 4.0s
+      fox.dropDelay = 1.4 + 0.1 + Math.random() * 1.5;
+      fox.dropVy = 0;
+      fox.bounceTimer = 0;
+      fox.tilt = (Math.random() - 0.5) * 0.4;
     });
 
-    // Start lobby background music according to configured lobby duration
     soundFX.playLobbyMusic();
   }
 
@@ -204,16 +235,17 @@ export class GameEngine {
   startBattle() {
     this.phase = 'BATTLE';
     this.battleTime = 0;
-    this.bullets = [];
+    this.celebrationTime = 0;
+    this.isCelebrating = false;
+    this.clashEffects = [];
     this.eliminationCount = 0;
     this.lastCleanupEliminationCount = 0;
     this.isRapidFire = false;
     this.isDuelMode = false;
     this.finalistIds = [];
     this.championId = null;
-    this.finalShotFired = false;
+    this.finalPunchLanded = false;
 
-    // Stop lobby music and blast battle horn
     soundFX.stopLobbyMusic();
     soundFX.playBattleStart();
   }
@@ -223,8 +255,11 @@ export class GameEngine {
     this.phase = 'IDLE';
     this.lobbyTime = 0;
     this.battleTime = 0;
-    this.bullets = [];
+    this.celebrationTime = 0;
+    this.isCelebrating = false;
+    this.clashEffects = [];
     this.explosions = [];
+    this.bullets = [];
     this.winner = null;
     this.top5 = [];
     this.eliminationCount = 0;
@@ -234,20 +269,29 @@ export class GameEngine {
     this.isDuelMode = false;
     this.finalistIds = [];
     this.championId = null;
-    this.finalShotFired = false;
+    this.finalPunchLanded = false;
     this.lastBeepSecond = -1;
+
+    this.doorPhase = 'INACTIVE';
+    this.doorTimer = 0;
+    this.isDoorAnimating = false;
+
     soundFX.stopLobbyMusic();
 
     this.foxes.forEach((fox) => {
-      fox.baseSpeed = 28 + Math.random() * 14;
+      fox.baseSpeed = 32 + Math.random() * 16;
       fox.speed = fox.baseSpeed;
-      fox.hp = fox.maxHp;
       fox.isAlive = true;
       fox.eliminatedAt = null;
       fox.kills = 0;
-      fox.damageDealt = 0;
-      fox.hitFlashTimer = 0;
+      fox.punchTimer = 0;
+      fox.brawlCooldown = 0;
+      fox.targetId = null;
       fox.isFinalist = false;
+      fox.isCharging = false;
+      fox.isDropping = false;
+      fox.bounceTimer = 0;
+      fox.tilt = 0;
     });
   }
 
@@ -259,11 +303,30 @@ export class GameEngine {
 
     // Phase 1: Sảnh chờ
     if (this.phase === 'LOBBY') {
-      this.lobbyTime += dt;
+      // Step Door Animation
+      if (this.isDoorAnimating) {
+        this.doorTimer += dt;
+        if (this.doorPhase === 'DROPPING') {
+          if (this.doorTimer >= this.doorDropDuration) {
+            this.doorPhase = 'OPENING';
+            this.doorTimer = 0;
+            soundFX.playDoorOpen();
+          }
+        } else if (this.doorPhase === 'OPENING') {
+          if (this.doorTimer >= this.doorOpenDuration) {
+            this.doorPhase = 'DONE';
+            this.isDoorAnimating = false;
+          }
+        }
+      } else {
+        // Countdown begins after door finishes opening
+        this.lobbyTime += dt;
+      }
+
       const timeLeft = this.lobbyDuration - this.lobbyTime;
       soundFX.updateLobbyMusic(timeLeft);
 
-      if (timeLeft <= 3.05 && timeLeft > 0.05) {
+      if (timeLeft <= 3.05 && timeLeft > 0.05 && !this.isDoorAnimating) {
         const sec = Math.ceil(timeLeft);
         if (sec !== this.lastBeepSecond) {
           this.lastBeepSecond = sec;
@@ -279,27 +342,47 @@ export class GameEngine {
       return;
     }
 
-    // Phase 2: Chiến đấu sinh tồn
+    // Phase 2: Chiến đấu đấm nhau sinh tồn
     if (this.phase === 'BATTLE') {
       this.battleTime += dt;
 
-      // Track rapid fire condition: when alive count <= 150 (TĂNG TỐC ĐỘ BAY & BẮN)
+      // When battle time ends or 1 champion remains -> 3s on-map winner celebration before opening form!
+      if (this.aliveCount <= 1 || this.battleTime >= this.battleDuration) {
+        if (!this.isCelebrating) {
+          this.isCelebrating = true;
+          this.celebrationTime = 0;
+          this.finishBattleCalculations();
+          soundFX.playVictory();
+        }
+
+        this.celebrationTime += dt;
+        this.updateMovement(dt);
+        this.updateClashEffects(dt);
+        this.updateExplosions(dt);
+
+        // After exactly 3.0s of on-map celebration, mark FINISHED so WinnerModal form pops up!
+        if (this.celebrationTime >= this.celebrationDuration) {
+          this.phase = 'FINISHED';
+        }
+        return;
+      }
+
+      // Speed boost when alive count <= 150
       this.isRapidFire = this.aliveCount <= 150;
 
       this.updateMovement(dt);
-      this.updateCombat(dt);
-      this.updateBullets(dt);
-      this.updateExplosions(dt);
 
-      // Finish battle precisely when reaching battleDuration
-      if (this.battleTime >= this.battleDuration) {
-        this.battleTime = this.battleDuration;
-        this.finishBattle();
+      // Foxes ONLY start brawling after countdown ends AND start banner fades out (startDelay = 1.5s)!
+      if (this.battleTime >= this.startDelay) {
+        this.updateMeleeCombat(dt);
       }
+
+      this.updateClashEffects(dt);
+      this.updateExplosions(dt);
     }
   }
 
-  // Flight steering & smooth boundary bounce with high-speed smoothness when <= 150
+  // Flight steering: In Battle, foxes CHARGE at their targets to punch!
   updateMovement(dt) {
     const padSide = 35;
     const padTop = 75; // avoid hiding under top HUD
@@ -308,14 +391,12 @@ export class GameEngine {
     const h = this.mapHeight;
 
     // Dynamic flight speed curve:
-    // First 2/3 time: normal calibrated speed (1.0x, ~28 - 42 px/s * speedScale)
-    // Final 1/3 time: smoothly decelerates to ~0.65x (~18 - 27 px/s * speedScale) for cinematic clarity
     let speedFactor = 1.0;
     if (this.phase === 'BATTLE') {
       const battleProgress = this.battleTime / Math.max(1, this.battleDuration);
       if (battleProgress > 0.667) {
         const slowRatio = Math.min(1.0, (battleProgress - 0.667) / 0.333);
-        speedFactor = 1.0 - slowRatio * 0.35; // Smoothly drops to 0.65x in the final stretch
+        speedFactor = 1.0 - slowRatio * 0.25;
       }
     }
     const currentScale = this.speedScale || 1.0;
@@ -324,18 +405,41 @@ export class GameEngine {
       const f = this.foxes[i];
       if (!f.isAlive) continue;
 
-      if (f.hitFlashTimer > 0) {
-        f.hitFlashTimer -= dt;
+      // 0. Falling down from above into Lobby Intro
+      if (f.isDropping) {
+        if (f.dropDelay > 0) {
+          f.dropDelay -= dt;
+          continue;
+        }
+        // Accelerate downward with gravity
+        f.dropVy = (f.dropVy || 0) + 1800 * dt;
+        f.y += f.dropVy * dt;
+        f.tilt = (f.tilt || 0) * 0.95;
+
+        // Check if landed at target
+        if (f.y >= f.targetY) {
+          f.y = f.targetY;
+          f.isDropping = false;
+          f.bounceTimer = 0.22;
+          f.dropVy = 0;
+          f.tilt = 0;
+          f.vx = Math.cos(f.angle) * f.baseSpeed;
+          f.vy = Math.sin(f.angle) * f.baseSpeed;
+        }
+        continue;
       }
 
-      f.bobPhase += dt * (1.6 * speedFactor * currentScale);
+      if (f.bounceTimer > 0) {
+        f.bounceTimer = Math.max(0, f.bounceTimer - dt);
+      }
 
-      // Target speed adjusted by speedFactor and user-configurable speedScale
-      const targetSpeed = f.baseSpeed * speedFactor * currentScale;
-      f.speed += (targetSpeed - f.speed) * Math.min(1, dt * 2.4);
+      if (f.punchTimer > 0) f.punchTimer -= dt;
+      if (f.brawlCooldown > 0) f.brawlCooldown -= dt;
 
-      // 1. Victory Lap: If only 1 fox is alive (final 0.2s)
-      if (this.aliveCount === 1) {
+      f.bobPhase += dt * (2.0 * speedFactor * currentScale);
+
+      // 1. Victory Lap: If only 1 champion remains or during celebration phase
+      if (this.aliveCount === 1 || this.isCelebrating) {
         const centerX = w / 2;
         const centerY = (h + padTop) / 2;
         const dx = centerX - f.x;
@@ -344,9 +448,25 @@ export class GameEngine {
         let diff = targetA - f.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        f.angle += diff * Math.min(1, dt * 2.2 * currentScale);
+        f.angle += diff * Math.min(1, dt * 3.5 * currentScale);
+        f.speed = f.baseSpeed * 0.9 * currentScale;
+        f.isCharging = false;
       }
-      // 2. 1v1 Final Duel: the 2 finalists perform dynamic dogfight circling (NEVER head-on collision freeze!)
+      // 2. Start Delay: while start banner is fading (first 1.5s), foxes roam peacefully without charging
+      else if (this.phase === 'BATTLE' && this.battleTime < this.startDelay) {
+        f.turnTimer -= dt;
+        if (f.turnTimer <= 0) {
+          f.turnTimer = 0.8 + Math.random() * 1.5;
+          f.targetAngle = f.angle + (Math.random() - 0.5) * 1.0;
+        }
+        let diff = f.targetAngle - f.angle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        f.angle += diff * Math.min(1, dt * 2.0 * currentScale);
+        f.speed = f.baseSpeed * currentScale;
+        f.isCharging = false;
+      }
+      // 3. 1v1 Final Duel: 2 finalists charge and clash directly head-on!
       else if (this.isDuelMode && this.finalistIds.includes(f.id)) {
         const rivalId = this.finalistIds.find(id => id !== f.id);
         const rival = this.foxMap.get(rivalId);
@@ -356,38 +476,70 @@ export class GameEngine {
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const angleToRival = Math.atan2(dy, dx);
 
-          // Dynamic dogfight orbit: maintain ~170-220px combat distance while circling
-          const orbitDir = (f.id % 2 === 0) ? 1 : -1;
-          let desiredAngle = angleToRival;
-
-          if (dist > 220) {
-            desiredAngle = angleToRival + 0.35 * orbitDir;
-          } else if (dist < 140) {
-            desiredAngle = angleToRival + Math.PI + 0.35 * orbitDir;
-          } else {
-            // Tangential orbit circling
-            desiredAngle = angleToRival + (Math.PI / 2) * orbitDir;
-          }
-
-          let diff = desiredAngle - f.angle;
+          // Direct charge to punch!
+          let diff = angleToRival - f.angle;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          f.angle += diff * Math.min(1, dt * 2.4 * currentScale);
+          f.angle += diff * Math.min(1, dt * 6.5 * currentScale);
+
+          // Attack dash speed
+          f.speed = (f.baseSpeed + 45) * currentScale;
+          f.isCharging = true;
         }
       }
-      // 3. Normal wandering flight
+      // 3. Battle Melee Charge: lock onto opponent and dash into them to brawl
+      else if (this.phase === 'BATTLE') {
+        let target = f.targetId ? this.foxMap.get(f.targetId) : null;
+        if (!target || !target.isAlive) {
+          // Find nearest opponent
+          f.targetId = null;
+          f.isCharging = false;
+        }
+
+        if (target && target.isAlive) {
+          const dx = target.x - f.x;
+          const dy = target.y - f.y;
+          const targetAngle = Math.atan2(dy, dx);
+
+          let diff = targetAngle - f.angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          f.angle += diff * Math.min(1, dt * 4.2 * currentScale);
+
+          // Boost speed while charging to punch
+          f.isCharging = true;
+          const chargeBoost = this.isRapidFire ? 35 : 20;
+          const targetSpeed = (f.baseSpeed + chargeBoost) * speedFactor * currentScale;
+          f.speed += (targetSpeed - f.speed) * Math.min(1, dt * 3.5);
+        } else {
+          // Wander seeking opponent
+          f.turnTimer -= dt;
+          if (f.turnTimer <= 0) {
+            f.turnTimer = 0.8 + Math.random() * 1.4;
+            f.targetAngle = f.angle + (Math.random() - 0.5) * 1.2;
+          }
+          let diff = f.targetAngle - f.angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          f.angle += diff * Math.min(1, dt * 2.2 * currentScale);
+
+          const targetSpeed = f.baseSpeed * speedFactor * currentScale;
+          f.speed += (targetSpeed - f.speed) * Math.min(1, dt * 2.0);
+          f.isCharging = false;
+        }
+      }
+      // 4. Lobby gentle floating
       else {
         f.turnTimer -= dt;
         if (f.turnTimer <= 0) {
           f.turnTimer = 1.2 + Math.random() * 2.0;
           f.targetAngle = f.angle + (Math.random() - 0.5) * 0.9;
         }
-
-        const steerRate = 1.6 * speedFactor * currentScale;
         let diff = f.targetAngle - f.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        f.angle += diff * Math.min(1, dt * steerRate);
+        f.angle += diff * Math.min(1, dt * 1.8 * currentScale);
+        f.speed = f.baseSpeed * currentScale;
       }
 
       f.vx = Math.cos(f.angle) * f.speed;
@@ -419,8 +571,8 @@ export class GameEngine {
     }
   }
 
-  // Automatic combat: Continuous smooth decay, orbital dogfight duel, 0.2s lethal finish
-  updateCombat(dt) {
+  // Melee combat: Foxes charge at each other, clash, random 50/50 win/loss, NO HP!
+  updateMeleeCombat(dt) {
     const totalDuration = this.battleDuration;
     const t = this.battleTime;
     const timeLeft = Math.max(0, totalDuration - t);
@@ -432,13 +584,11 @@ export class GameEngine {
     }
     const aliveLen = aliveFoxes.length;
     this.aliveCount = aliveLen;
-    this.livingFoxes = aliveFoxes;
 
-    // If only 1 fox is left (the sole winner), combat stops and victory lap begins
     if (aliveLen <= 1) return;
 
     // =========================================================================
-    // STAGE 3: THE FINAL 0.2s - LETHAL FINISHING BLOW (EXACTLY 1 SOLE WINNER)
+    // STAGE 3: THE FINAL 0.2s - DECISIVE KNOCKOUT PUNCH (EXACTLY 1 SOLE WINNER)
     // =========================================================================
     if (timeLeft <= 0.2) {
       if (aliveLen > 1) {
@@ -449,24 +599,24 @@ export class GameEngine {
           champion = this.foxMap.get(this.championId) || aliveFoxes[0];
           runnerUp = (champion === aliveFoxes[0]) ? aliveFoxes[1] : aliveFoxes[0];
         } else {
-          champion = (aliveFoxes[0].hp + aliveFoxes[0].damageDealt >= aliveFoxes[1].hp + aliveFoxes[1].damageDealt)
-            ? aliveFoxes[0]
-            : aliveFoxes[1];
-          runnerUp = (champion === aliveFoxes[0]) ? aliveFoxes[1] : aliveFoxes[0];
+          // Random coin toss if not yet chosen
+          const flip = Math.random() < 0.5;
+          champion = flip ? aliveFoxes[0] : aliveFoxes[1];
+          runnerUp = flip ? aliveFoxes[1] : aliveFoxes[0];
           this.championId = champion.id;
         }
 
-        if (!this.finalShotFired && runnerUp && runnerUp.isAlive) {
-          this.finalShotFired = true;
-          // Champion fires lethal mega-laser beam
-          this.fireBullet(champion, runnerUp, 9999, true);
+        if (!this.finalPunchLanded && runnerUp && runnerUp.isAlive) {
+          this.finalPunchLanded = true;
+          // Decisive KO punch!
+          this.addClashEffect((champion.x + runnerUp.x) / 2, (champion.y + runnerUp.y) / 2, 'K.O!');
+          soundFX.playPunch();
 
-          runnerUp.hp = 0;
           runnerUp.isAlive = false;
           runnerUp.eliminatedAt = t;
           this.aliveCount = 1;
           this.eliminationCount++;
-          if (champion) champion.kills++;
+          champion.kills++;
           this.addExplosion(runnerUp.x, runnerUp.y, true);
           soundFX.playExplosion();
         }
@@ -475,15 +625,14 @@ export class GameEngine {
     }
 
     // =========================================================================
-    // STAGE 2: 1v1 DUEL MODE (0.7s down to 0.2s: EXACTLY 2 FINALISTS DOGFIGHTING)
+    // STAGE 2: 1v1 DUEL MODE (0.7s down to 0.2s: 2 FINALISTS PUNCH FLURRY)
     // =========================================================================
     if (aliveLen === 2 || timeLeft <= 0.7) {
-      // In case any excess remains at 0.7s, trim cleanly to top 2 finalists
       if (aliveLen > 2) {
-        aliveFoxes.sort((a, b) => (b.hp + b.damageDealt * 0.1) - (a.hp + a.damageDealt * 0.1));
+        // Trim down cleanly to 2 finalists
+        aliveFoxes.sort((a, b) => b.kills - a.kills);
         for (let i = 2; i < aliveFoxes.length; i++) {
           const victim = aliveFoxes[i];
-          victim.hp = 0;
           victim.isAlive = false;
           victim.eliminatedAt = t;
           this.aliveCount--;
@@ -502,234 +651,161 @@ export class GameEngine {
       f2.isFinalist = true;
 
       if (!this.championId) {
-        if (f1.hp !== f2.hp) {
-          this.championId = f1.hp > f2.hp ? f1.id : f2.id;
-        } else if (f1.damageDealt !== f2.damageDealt) {
-          this.championId = f1.damageDealt > f2.damageDealt ? f1.id : f2.id;
-        } else {
-          this.championId = f1.id;
-        }
+        this.championId = Math.random() < 0.5 ? f1.id : f2.id;
       }
 
-      // Fast, dramatic dogfight laser exchanges
-      f1.fireTimer -= dt;
-      f2.fireTimer -= dt;
+      // Proximity check for flurry punches
+      const dx = f2.x - f1.x;
+      const dy = f2.y - f1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (f1.fireTimer <= 0) {
-        f1.fireTimer = 0.14 + Math.random() * 0.08;
-        this.fireBullet(f1, f2, 12 + Math.random() * 8);
-      }
-      if (f2.fireTimer <= 0) {
-        f2.fireTimer = 0.14 + Math.random() * 0.08;
-        this.fireBullet(f2, f1, 12 + Math.random() * 8);
+      if (dist < 42) {
+        // Trade punches with comic sparks!
+        f1.punchTimer = 0.15;
+        f2.punchTimer = 0.15;
+        const midX = (f1.x + f2.x) / 2;
+        const midY = (f1.y + f2.y) / 2;
+        this.addClashEffect(midX, midY, Math.random() < 0.5 ? 'BỐP!' : 'CHÁT!');
+        soundFX.playPunch();
+
+        // Push back slightly to re-charge
+        f1.x -= (dx / dist) * 14;
+        f1.y -= (dy / dist) * 14;
+        f2.x += (dx / dist) * 14;
+        f2.y += (dy / dist) * 14;
       }
       return;
     }
 
     // =========================================================================
-    // STAGE 1: SMOOTH CONTINUOUS PACING (400 -> 2 FOXES EVENLY THROUGHOUT MATCH)
+    // STAGE 1: BRAWL PACING (CONTINUOUS SMOOTH CHARGE & CLASH ACROSS TIME)
     // =========================================================================
     const duelStartTime = Math.max(0.5, totalDuration - 0.7);
     const initialCount = Math.max(2, this.foxes.length);
     const progress = Math.min(1.0, t / duelStartTime);
 
-    // Smooth decay power curve: reaches ~150 foxes at 50% time, 2 foxes at duelStartTime
+    // Target living count curve
     const remainingFactor = Math.pow(1 - progress, 1.35);
     const targetPacedAlive = Math.max(2, Math.round(2 + (initialCount - 2) * remainingFactor));
 
-    // Smoothly prune excess at a continuous, steady rate (max 1 or 2 per frame)
-    // This completely eliminates any sudden freeze or massive 100-fox kill spike!
-    if (aliveLen > targetPacedAlive) {
-      const excess = aliveLen - targetPacedAlive;
-      const elimThisTick = Math.min(excess, Math.max(1, Math.floor(excess * dt * 14)));
-
-      // Target weakest foxes (lowest HP + damage), preserving top contenders
-      const sortedCandidates = [...aliveFoxes].sort((a, b) => (a.hp + a.damageDealt * 0.05) - (b.hp + b.damageDealt * 0.05));
-
-      for (let k = 0; k < elimThisTick; k++) {
-        const victim = sortedCandidates[k];
-        if (victim && victim.isAlive) {
-          victim.hp = 0;
-          victim.isAlive = false;
-          victim.eliminatedAt = t;
-          this.aliveCount--;
-          this.eliminationCount++;
-          this.addExplosion(victim.x, victim.y, false);
-
-          // Attribute kill and damage to nearest active shooter
-          for (let s = aliveFoxes.length - 1; s >= 0; s--) {
-            const shooter = aliveFoxes[s];
-            if (shooter.isAlive && shooter.id !== victim.id) {
-              shooter.kills++;
-              shooter.damageDealt += 90;
-              break;
-            }
-          }
-        }
-      }
-
-      // Memory cleanup trigger every 30 kills
-      if (this.eliminationCount - this.lastCleanupEliminationCount >= 30) {
-        this.lastCleanupEliminationCount = this.eliminationCount;
-        this.performMemoryCleanup();
-      }
-    }
-
-    // Normal multi-fox combat & visual laser volleys
-    const cooldownMultiplier = this.isRapidFire ? 0.42 : 0.85;
-    const isGlobalRange = aliveLen <= 40;
-
+    // Assign targets to charge at
     for (let i = 0; i < aliveLen; i++) {
-      const shooter = aliveFoxes[i];
-      shooter.fireTimer -= dt;
-
-      if (shooter.fireTimer <= 0) {
-        shooter.fireTimer = (0.50 + Math.random() * 0.45) * cooldownMultiplier;
-
+      const f = aliveFoxes[i];
+      if (!f.targetId || Math.random() < 0.08) {
+        // Pick nearest or random living opponent
         let bestTarget = null;
-        let minD2 = isGlobalRange ? Infinity : shooter.attackRange * shooter.attackRange;
-        const samples = isGlobalRange ? aliveLen : Math.min(8, aliveLen);
-
+        let minD2 = Infinity;
+        const samples = Math.min(10, aliveLen);
         for (let s = 0; s < samples; s++) {
-          const targetCandidate = isGlobalRange ? aliveFoxes[s] : aliveFoxes[Math.floor(Math.random() * aliveLen)];
-          if (targetCandidate.id === shooter.id) continue;
-
-          const dx = targetCandidate.x - shooter.x;
-          const dy = targetCandidate.y - shooter.y;
-          const d2 = dx * dx + dy * dy;
-
+          const cand = aliveFoxes[Math.floor(Math.random() * aliveLen)];
+          if (cand.id === f.id) continue;
+          const d2 = (cand.x - f.x) ** 2 + (cand.y - f.y) ** 2;
           if (d2 < minD2) {
             minD2 = d2;
-            bestTarget = targetCandidate;
+            bestTarget = cand;
           }
         }
-
-        if (bestTarget) {
-          const baseDmg = 25 + Math.random() * 15;
-          this.fireBullet(shooter, bestTarget, baseDmg);
-        }
+        f.targetId = bestTarget ? bestTarget.id : null;
       }
     }
-  }
 
-  // Fire laser bullet towards target (Speed reduced by 1/3 for clear visibility)
-  fireBullet(shooter, target, damage, isMega = false) {
-    if (this.bullets.length > 50 && !isMega) return;
+    // Collision & Brawl Clash Check between all active charging foxes
+    const clashRadius = 32;
+    const clashRadiusSq = clashRadius * clashRadius;
 
-    const dx = target.x - shooter.x;
-    const dy = target.y - shooter.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    // Laser speeds calibrated for visible, impactful projectiles
-    const bulletSpeed = isMega ? 640 : (this.isRapidFire ? 460 : 340);
+    for (let i = 0; i < aliveLen; i++) {
+      const foxA = aliveFoxes[i];
+      if (!foxA.isAlive || foxA.brawlCooldown > 0) continue;
 
-    this.bullets.push({
-      id: ++this.bulletIdCounter,
-      shooterId: shooter.id,
-      targetId: target.id,
-      x: shooter.x,
-      y: shooter.y,
-      vx: (dx / dist) * bulletSpeed,
-      vy: (dy / dist) * bulletSpeed,
-      damage,
-      lifeTime: 0.95,
-      isMegaLaser: isMega
-    });
+      for (let j = i + 1; j < aliveLen; j++) {
+        const foxB = aliveFoxes[j];
+        if (!foxB.isAlive || foxB.brawlCooldown > 0) continue;
 
-    soundFX.playLaser();
-  }
+        const dx = foxB.x - foxA.x;
+        const dy = foxB.y - foxA.y;
+        if (Math.abs(dx) > clashRadius || Math.abs(dy) > clashRadius) continue;
 
-  // Advance laser bullets and execute fast collision checks
-  updateBullets(dt) {
-    const hitRadiusSq = 24 * 24;
-    const living = this.livingFoxes || [];
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= clashRadiusSq) {
+          // BRAWL CLASH TRIGGERED!
+          const midX = (foxA.x + foxB.x) / 2;
+          const midY = (foxA.y + foxB.y) / 2;
 
-    for (let b = this.bullets.length - 1; b >= 0; b--) {
-      const bul = this.bullets[b];
-      bul.x += bul.vx * dt;
-      bul.y += bul.vy * dt;
-      bul.lifeTime -= dt;
+          // Only eliminate if current count exceeds paced curve OR by natural clash probability
+          const shouldEliminate = aliveLen > targetPacedAlive || Math.random() < 0.35;
 
-      if (bul.lifeTime <= 0) {
-        this.bullets.splice(b, 1);
-        continue;
-      }
+          if (shouldEliminate && aliveLen > 2) {
+            // Random 50/50 win or loss!
+            const winnerFox = Math.random() < 0.5 ? foxA : foxB;
+            const loserFox = (winnerFox === foxA) ? foxB : foxA;
 
-      let hit = false;
+            loserFox.isAlive = false;
+            loserFox.eliminatedAt = t;
+            this.aliveCount--;
+            this.eliminationCount++;
+            winnerFox.kills++;
 
-      // 1. Direct Target check O(1)
-      const targetFox = this.foxMap.get(bul.targetId);
-      if (targetFox && targetFox.isAlive) {
-        const dx = targetFox.x - bul.x;
-        const dy = targetFox.y - bul.y;
-        if (dx * dx + dy * dy <= hitRadiusSq) {
-          this.applyDamage(targetFox, bul);
-          hit = true;
-        }
-      }
+            winnerFox.punchTimer = 0.2;
+            winnerFox.brawlCooldown = 0.3; // brief rest to find next opponent
 
-      // 2. Proximity check against LIVING FOXES ONLY (not all 400 foxes!)
-      if (!hit && bul.lifeTime < 0.75 && !this.isDuelMode && living.length <= 40) {
-        for (let f = 0; f < living.length; f++) {
-          const fox = living[f];
-          if (!fox.isAlive || fox.id === bul.shooterId || fox.id === bul.targetId) continue;
+            this.addClashEffect(midX, midY, ['BỐP!', 'BAM!', 'POW!', 'CHÁT!'][Math.floor(Math.random() * 4)]);
+            soundFX.playPunch();
+            this.addExplosion(loserFox.x, loserFox.y, false);
 
-          if (Math.abs(fox.x - bul.x) > 24 || Math.abs(fox.y - bul.y) > 24) continue;
-
-          const dx = fox.x - bul.x;
-          const dy = fox.y - bul.y;
-          if (dx * dx + dy * dy <= hitRadiusSq) {
-            this.applyDamage(fox, bul);
-            hit = true;
+            // Memory cleanup trigger every 30 kills
+            if (this.eliminationCount - this.lastCleanupEliminationCount >= 30) {
+              this.lastCleanupEliminationCount = this.eliminationCount;
+              this.performMemoryCleanup();
+            }
             break;
+          } else {
+            // Bounce off each other with punch flurry spark
+            foxA.brawlCooldown = 0.25;
+            foxB.brawlCooldown = 0.25;
+            foxA.punchTimer = 0.15;
+            foxB.punchTimer = 0.15;
+
+            const dist = Math.sqrt(d2) || 1;
+            foxA.x -= (dx / dist) * 12;
+            foxA.y -= (dy / dist) * 12;
+            foxB.x += (dx / dist) * 12;
+            foxB.y += (dy / dist) * 12;
+
+            this.addClashEffect(midX, midY, 'BỐP!');
+            soundFX.playPunch();
           }
         }
       }
+    }
+  }
 
-      if (hit) {
-        this.bullets.splice(b, 1);
+  // Add punch clash visual effect (comic POW! / BAM! starburst)
+  addClashEffect(x, y, text = 'BỐP!') {
+    if (this.clashEffects.length > 25) {
+      this.clashEffects.shift();
+    }
+    this.clashEffects.push({
+      x,
+      y,
+      text,
+      life: 0.38,
+      maxLife: 0.38,
+      size: 18 + Math.random() * 8,
+      color: ['#facc15', '#f97316', '#ef4444', '#fbbf24'][Math.floor(Math.random() * 4)]
+    });
+  }
+
+  updateClashEffects(dt) {
+    for (let c = this.clashEffects.length - 1; c >= 0; c--) {
+      const cl = this.clashEffects[c];
+      cl.life -= dt;
+      if (cl.life <= 0) {
+        this.clashEffects.splice(c, 1);
       }
     }
   }
 
-  // Apply hit damage and handle elimination (with 30-kill memory cleanup trigger)
-  applyDamage(victim, bullet) {
-    let actualDmg = Math.min(victim.hp, bullet.damage);
-    if (this.isDuelMode && victim.hp - actualDmg <= 10) {
-      actualDmg = Math.max(0, victim.hp - 10);
-    }
-
-    victim.hp -= actualDmg;
-    victim.hitFlashTimer = 0.18;
-
-    const shooter = this.foxMap.get(bullet.shooterId);
-    if (shooter) {
-      shooter.damageDealt += Math.round(actualDmg);
-    }
-
-    // Eliminate fox
-    if (victim.hp <= 0) {
-      victim.hp = 0;
-      victim.isAlive = false;
-      victim.eliminatedAt = this.battleTime;
-      this.aliveCount = Math.max(0, this.aliveCount - 1);
-      this.eliminationCount++;
-
-      if (shooter) {
-        shooter.kills += 1;
-      }
-
-      this.addExplosion(victim.x, victim.y, bullet.isMegaLaser);
-      soundFX.playExplosion();
-
-      // Trigger Memory Cleanup every 30 kills
-      if (this.eliminationCount - this.lastCleanupEliminationCount >= 30) {
-        this.lastCleanupEliminationCount = this.eliminationCount;
-        this.performMemoryCleanup();
-      }
-    }
-  }
-
-  // Trigger elimination explosion particles with cap to prevent lag
+  // Trigger elimination explosion particles
   addExplosion(x, y, isMega = false) {
     let totalActive = 0;
     for (let i = 0; i < this.explosions.length; i++) {
@@ -766,7 +842,6 @@ export class GameEngine {
     });
   }
 
-  // Update explosion particles
   updateExplosions(dt) {
     for (let e = this.explosions.length - 1; e >= 0; e--) {
       const exp = this.explosions[e];
@@ -786,26 +861,22 @@ export class GameEngine {
     }
   }
 
-  // Conclude battle: Crown the 1 sole Champion and Top 5 Survivors
-  finishBattle() {
-    this.phase = 'FINISHED';
-    this.bullets = [];
+  // Calculate champion and top 5 when celebration begins
+  finishBattleCalculations() {
+    this.clashEffects = [];
 
     const living = this.foxes.filter(f => f.isAlive);
     const eliminated = this.foxes.filter(f => !f.isAlive);
 
-    // Rule 1: Living foxes sorted by HP descending -> damageDealt -> kills -> ID
+    // Living foxes (the sole champion)
     living.sort((a, b) => {
-      if (b.hp !== a.hp) return b.hp - a.hp;
-      if (b.damageDealt !== a.damageDealt) return b.damageDealt - a.damageDealt;
       if (b.kills !== a.kills) return b.kills - a.kills;
       return a.id - b.id;
     });
 
-    // Rule 2: Eliminated foxes sorted by eliminatedAt descending (survived longest) -> damageDealt -> kills -> ID
+    // Eliminated foxes sorted by eliminatedAt descending (survived longest) -> kills -> ID
     eliminated.sort((a, b) => {
       if (b.eliminatedAt !== a.eliminatedAt) return (b.eliminatedAt || 0) - (a.eliminatedAt || 0);
-      if (b.damageDealt !== a.damageDealt) return b.damageDealt - a.damageDealt;
       if (b.kills !== a.kills) return b.kills - a.kills;
       return a.id - b.id;
     });
@@ -814,5 +885,11 @@ export class GameEngine {
 
     this.winner = fullRanked[0] || null;
     this.top5 = fullRanked.slice(0, 5); // ONLY TOP 5 SAVED & DISPLAYED
+  }
+
+  // Conclude battle: Mark FINISHED
+  finishBattle() {
+    this.finishBattleCalculations();
+    this.phase = 'FINISHED';
   }
 }

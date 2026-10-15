@@ -8,11 +8,16 @@ const FOX_IMAGE_URL = 'https://res.cloudinary.com/ds11ggie4/image/upload/v179199
 export default function WinnerModal({
   winner,
   top5 = [],
+  top10 = [],
+  gameMode = 'BATTLE',
   isOpen,
   onClose,
   onRestart,
   onEditNames
 }) {
+  const isRace = gameMode === 'RACE';
+  const rankings = isRace ? (top10.length > 0 ? top10 : top5) : top5;
+
   useEffect(() => {
     if (isOpen && winner) {
       soundFX.playVictory();
@@ -64,7 +69,7 @@ export default function WinnerModal({
         {/* Crown Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 via-orange-500/30 to-amber-500/20 border border-amber-400/60 text-amber-300 font-orbitron text-xs font-black tracking-widest uppercase mb-4 animate-bounce">
           <Crown className="w-4 h-4 text-amber-400 fill-amber-400" />
-          <span>VÔ ĐỊCH BATTLE ROYALE</span>
+          <span>{isRace ? 'QUÁN QUÂN FOX RACE' : 'VÔ ĐỊCH BATTLE ROYALE'}</span>
           <Crown className="w-4 h-4 text-amber-400 fill-amber-400" />
         </div>
 
@@ -78,16 +83,16 @@ export default function WinnerModal({
               className="w-full h-full object-contain filter drop-shadow-[0_0_15px_rgba(245,158,11,0.8)] transform hover:scale-110 transition duration-300"
             />
           </div>
-          <div className="absolute -bottom-2 right-1/2 translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 px-3 py-0.5 rounded-full font-black text-xs uppercase shadow-md flex items-center gap-1">
+          <div className="absolute -bottom-2 right-1/2 translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 px-3 py-0.5 rounded-full font-black text-xs uppercase shadow-md flex items-center gap-1 whitespace-nowrap">
             <Sparkles className="w-3 h-3 fill-current" />
-            <span>TOP 1 SURVIVOR</span>
+            <span>{isRace ? 'TOP 1 FINISHER' : 'TOP 1 SURVIVOR'}</span>
           </div>
         </div>
 
         {/* Winner Name */}
         <div className="mb-5">
           <p className="text-xs sm:text-sm uppercase tracking-widest font-semibold text-slate-400 mb-1">
-            CHIẾN BINH SINH TỒN CUỐI CÙNG
+            {isRace ? 'CHIẾN BINH VỀ ĐÍCH NHANH NHẤT' : 'CHIẾN BINH SINH TỒN CUỐI CÙNG'}
           </p>
           <h1 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 tracking-tight drop-shadow-md break-words py-1">
             {winner.name}
@@ -97,59 +102,95 @@ export default function WinnerModal({
           </div>
         </div>
 
-        {/* Winner Combat Stats Cards */}
-        <div className="grid grid-cols-3 gap-3 mb-6 max-w-lg mx-auto">
-          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
-            <div className="flex items-center justify-center gap-1 text-rose-400 text-[11px] font-bold mb-1">
-              <Skull className="w-3.5 h-3.5" />
-              <span>HẠ GỤC</span>
+        {/* Winner Stats Cards */}
+        {isRace ? (
+          <div className="grid grid-cols-3 gap-3 mb-6 max-w-lg mx-auto">
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-amber-400 text-[11px] font-bold mb-1">
+                <Trophy className="w-3.5 h-3.5" />
+                <span>THỨ HẠNG</span>
+              </div>
+              <div className="font-orbitron font-black text-xl text-yellow-400">
+                #1
+              </div>
             </div>
-            <div className="font-orbitron font-black text-xl text-white">
-              {winner.kills || 0}
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-emerald-400 text-[11px] font-bold mb-1">
+                <Zap className="w-3.5 h-3.5" />
+                <span>QUÃNG ĐƯỜNG</span>
+              </div>
+              <div className="font-orbitron font-black text-xl text-white">
+                {Math.round(winner.distance || 0)} <span className="text-[10px] text-slate-400">m</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-sky-400 text-[11px] font-bold mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>THỜI GIAN</span>
+              </div>
+              <div className="font-orbitron font-black text-xl text-white">
+                10.0 <span className="text-[10px] text-slate-400">s</span>
+              </div>
             </div>
           </div>
-
-          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
-            <div className="flex items-center justify-center gap-1 text-emerald-400 text-[11px] font-bold mb-1">
-              <Heart className="w-3.5 h-3.5" />
-              <span>MÁU CÒN</span>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 mb-6 max-w-lg mx-auto">
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-rose-400 text-[11px] font-bold mb-1">
+                <Skull className="w-3.5 h-3.5" />
+                <span>ĐẤM HẠ GỤC</span>
+              </div>
+              <div className="font-orbitron font-black text-xl text-white">
+                {winner.kills || 0}
+              </div>
             </div>
-            <div className="font-orbitron font-black text-xl text-white">
-              {Math.round(winner.hp || 0)} <span className="text-[10px] text-slate-400">/ 100</span>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-amber-400 text-[11px] font-bold mb-1">
+                <Crown className="w-3.5 h-3.5" />
+                <span>THÀNH TÍCH</span>
+              </div>
+              <div className="font-orbitron font-black text-sm text-amber-300 py-1">
+                VÔ ĐỊCH 👑
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+              <div className="flex items-center justify-center gap-1 text-emerald-400 text-[11px] font-bold mb-1">
+                <Swords className="w-3.5 h-3.5" />
+                <span>THỂ THỨC</span>
+              </div>
+              <div className="font-orbitron font-black text-sm text-emerald-300 py-1">
+                BRAWL 1V1
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
-            <div className="flex items-center justify-center gap-1 text-amber-400 text-[11px] font-bold mb-1">
-              <Zap className="w-3.5 h-3.5" />
-              <span>SÁT THƯƠNG</span>
-            </div>
-            <div className="font-orbitron font-black text-xl text-white">
-              {winner.damageDealt || 0}
-            </div>
-          </div>
-        </div>
-
-        {/* TOP 5 Survival Leaderboard */}
+        {/* Leaderboard */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 mb-6 text-left">
           <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
             <div className="flex items-center gap-2">
               <Trophy className="w-4 h-4 text-amber-400" />
-              <span>BẢNG VÀNG TOP 5 SINH TỒN</span>
+              <span>{isRace ? 'BẢNG VÀNG TOP 10 VỀ ĐÍCH' : 'BẢNG VÀNG TOP 5 SINH TỒN'}</span>
             </div>
-            <span className="text-[11px] font-mono text-slate-500">KILLS / SÁT THƯƠNG</span>
+            <span className="text-[11px] font-mono text-slate-500">
+              {isRace ? 'QUÃNG ĐƯỜNG' : 'HẠ GỤC'}
+            </span>
           </div>
 
-          <div className="space-y-1.5 pr-1">
-            {(top5 || []).slice(0, 5).map((player, index) => {
+          <div className="space-y-1.5 pr-1 max-h-56 overflow-y-auto">
+            {rankings.map((player, index) => {
               const isFirst = index === 0;
               const isSecond = index === 1;
               const isThird = index === 2;
 
               return (
                 <div
-                  key={player.id}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition ${
+                  key={player.id || index}
+                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition ${
                     isFirst
                       ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/50 text-amber-200 font-bold'
                       : isSecond
@@ -166,22 +207,26 @@ export default function WinnerModal({
                     <div className="truncate">
                       <span className="text-white">{player.name}</span>
                       <span className="ml-1.5 text-[10px] text-slate-500">ID #{player.id}</span>
-                      {player.isAlive ? (
-                        <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          Sống sót ({Math.round(player.hp)} HP)
-                        </span>
-                      ) : (
-                        <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                          Đã loại
-                        </span>
+                      {!isRace && (
+                        player.isAlive ? (
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            Sống sót
+                          </span>
+                        ) : (
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            Đã bị hạ
+                          </span>
+                        )
                       )}
                     </div>
                   </div>
 
                   <div className="font-mono text-right font-semibold text-slate-300 text-[11px] shrink-0">
-                    <span className="text-rose-400">{player.kills || 0} ⚔️</span>
-                    <span className="mx-1 text-slate-600">|</span>
-                    <span className="text-amber-400">{player.damageDealt || 0} dmg</span>
+                    {isRace ? (
+                      <span className="text-amber-400">{Math.round(player.distance || 0)}m</span>
+                    ) : (
+                      <span className="text-rose-400">{player.kills || 0} 🥊</span>
+                    )}
                   </div>
                 </div>
               );
@@ -197,7 +242,7 @@ export default function WinnerModal({
             className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-orange-600 via-red-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-orbitron font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 hover:scale-105 active:scale-95 transition cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>CHƠI LẠI TRẬN MỚI</span>
+            <span>{isRace ? 'ĐUA LẠI TRẬN MỚI' : 'CHƠI LẠI TRẬN MỚI'}</span>
           </button>
 
           <button
