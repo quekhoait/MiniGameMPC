@@ -24,7 +24,7 @@ export default function NameInput({ onFoxesReady, initialNames = [] }) {
     if (initialNames && initialNames.length > 0) {
       setRawText(initialNames.map(p => p.name).join('\n'));
     } else {
-      const saved = localStorage.getItem('fox_race_names');
+      const saved = localStorage.getItem('fox_battle_names') || localStorage.getItem('fox_race_names');
       if (saved) {
         setRawText(saved);
       }
@@ -48,14 +48,14 @@ export default function NameInput({ onFoxesReady, initialNames = [] }) {
     if (lines.length > 400) {
       setWarning(`Đang có ${lines.length} tên. Hệ thống hỗ trợ tối đa 400 cáo. Hãy giảm bớt hoặc nhấn "Giới hạn 400" để tiếp tục.`);
     } else if (lines.length === 0) {
-      setWarning('Vui lòng nhập ít nhất 2 người chơi để tham gia cuộc đua.');
+      setWarning('Vui lòng nhập ít nhất 2 chiến binh cáo để bắt đầu đại chiến sinh tồn.');
     } else {
       setWarning('');
     }
 
     // Save to local storage
     if (rawText) {
-      localStorage.setItem('fox_race_names', rawText);
+      localStorage.setItem('fox_battle_names', rawText);
     }
   }, [rawText]);
 
@@ -272,7 +272,7 @@ export default function NameInput({ onFoxesReady, initialNames = [] }) {
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Xác nhận & Tạo {parsedList.length > 0 ? parsedList.length : ''} Cáo Bay</span>
+          <span>TẠO ĐỘI CÁO ({parsedList.length} CHIẾN BINH)</span>
         </button>
       </div>
     </div>

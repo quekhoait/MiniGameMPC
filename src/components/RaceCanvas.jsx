@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 const FOX_IMAGE_SRC = 'https://res.cloudinary.com/ds11ggie4/image/upload/v1791990958/c%C3%A1o_bay-removebg-preview_sz7uol.png';
 const BG_IMAGE_SRC = 'https://res.cloudinary.com/ds11ggie4/image/upload/v1791991318/Standee_x_D%C3%A2y_%C4%91eo_WebDesign_2026_fkxelx.png';
-
+//#Hi mpc
 export default function RaceCanvas({
   engine,
   isRacing,

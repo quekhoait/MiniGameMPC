@@ -1,27 +1,31 @@
-// Web Audio API Sound Synthesizer for FOX RACE
-// Generates high quality game sound effects programmatically without external MP3 files
+// audio.js - High performance Web Audio API Sound FX for FOX BATTLE ROYALE
+// Procedural audio generation with zero external files, no memory leaks, strict throttling
 
-class SoundFX {
+class SoundManager {
   constructor() {
     this.ctx = null;
     this.isMuted = false;
-    this.isInitialized = false;
+    this.lastLaserTime = 0;
+    this.lastExplosionTime = 0;
+    this.lastBeepSecond = -1;
   }
 
   init() {
     if (this.ctx) return;
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AudioContext();
-      this.isInitialized = true;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
     } catch (e) {
-      console.warn("Web Audio not supported", e);
+      console.warn('Web Audio not supported', e);
     }
   }
 
   resume() {
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume();
+    this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -29,131 +33,158 @@ class SoundFX {
     this.isMuted = muted;
   }
 
-  // Beep countdown for 3, 2, 1
-  playCountdownBeep(freq = 520, duration = 0.15) {
+  // Countdown Beep (1 beep per second in last 3s)
+  playCountdownBeep(freq = 560, duration = 0.1) {
     if (this.isMuted) return;
-    this.init();
     this.resume();
     if (!this.ctx) return;
 
     try {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
+      const t = this.ctx.currentTime;
 
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
 
-      gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start();
-      osc.stop(this.ctx.currentTime + duration);
-    } catch (e) {
-      console.error(e);
-    }
+      osc.start(t);
+      osc.stop(t + duration);
+    } catch (e) {}
   }
 
-  // GO start sound
-  playStartHorn() {
+  // Battle Start Horn
+  playBattleStart() {
     if (this.isMuted) return;
-    this.init();
     this.resume();
     if (!this.ctx) return;
 
     try {
-      const now = this.ctx.currentTime;
-      [880, 1100, 1320].forEach((freq) => {
+      const t = this.ctx.currentTime;
+      [587, 740, 880, 1175].forEach((freq, idx) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
+        const startTime = t + idx * 0.07;
+        const dur = 0.45;
 
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(freq, now);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, startTime);
 
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        gain.gain.setValueAtTime(0.2, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
 
-        osc.start(now);
-        osc.stop(now + 0.6);
+        osc.start(startTime);
+        osc.stop(startTime + dur);
       });
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }
 
-  // Boost whoosh sound
-  playBoost() {
+  // Laser shot (strictly throttled to max 6 shots/sec to prevent audio buffer spikes)
+  playLaser() {
     if (this.isMuted) return;
-    this.init();
+    const now = performance.now();
+    if (now - this.lastLaserTime < 160) return;
+    this.lastLaserTime = now;
+
     this.resume();
     if (!this.ctx) return;
 
     try {
-      const now = this.ctx.currentTime;
+      const t = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(800, now + 0.25);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(900, t);
+      osc.frequency.exponentialRampToValueAtTime(150, t + 0.08);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start(now);
-      osc.stop(now + 0.25);
-    } catch (e) {
-      console.error(e);
-    }
+      osc.start(t);
+      osc.stop(t + 0.08);
+    } catch (e) {}
   }
 
-  // Victory Fanfare
+  // Explosion sound (throttled to max 4 explosions/sec)
+  playExplosion() {
+    if (this.isMuted) return;
+    const now = performance.now();
+    if (now - this.lastExplosionTime < 220) return;
+    this.lastExplosionTime = now;
+
+    this.resume();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+      const dur = 0.3;
+
+      // Low pitch boom
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(30, t + dur);
+
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + dur);
+    } catch (e) {}
+  }
+
+  // Victory fanfare
   playVictory() {
     if (this.isMuted) return;
-    this.init();
     this.resume();
     if (!this.ctx) return;
 
     try {
       const notes = [
-        { f: 523.25, t: 0, d: 0.15 },    // C5
-        { f: 659.25, t: 0.15, d: 0.15 }, // E5
-        { f: 783.99, t: 0.30, d: 0.15 }, // G5
-        { f: 1046.50, t: 0.45, d: 0.6 }, // C6
-        { f: 880.00, t: 0.70, d: 0.2 },  // A5
-        { f: 1046.50, t: 0.95, d: 0.9 }  // C6
+        { f: 523.25, d: 0.15 },
+        { f: 659.25, d: 0.15 },
+        { f: 783.99, d: 0.18 },
+        { f: 1046.50, d: 0.55 }
       ];
 
-      const now = this.ctx.currentTime;
+      let t = this.ctx.currentTime;
       notes.forEach((note) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
 
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(note.f, now + note.t);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(note.f, t);
 
-        gain.gain.setValueAtTime(0.3, now + note.t);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + note.t + note.d);
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + note.d);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
 
-        osc.start(now + note.t);
-        osc.stop(now + note.t + note.d);
+        osc.start(t);
+        osc.stop(t + note.d);
+
+        t += note.d * 0.9;
       });
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }
 }
 
-export const soundFX = new SoundFX();
-
+export const soundFX = new SoundManager();
