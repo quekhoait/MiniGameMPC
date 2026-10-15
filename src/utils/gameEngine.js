@@ -390,6 +390,13 @@ export class GameEngine {
     const w = this.mapWidth;
     const h = this.mapHeight;
 
+    // 50 con cuối cùng tụ lại 1 vùng
+    const isGathering50 = this.phase === 'BATTLE' && this.aliveCount <= 50 && !this.isCelebrating;
+    const gatherCenterX = w / 2;
+    const gatherCenterY = (h + padTop) / 2;
+    const gatherRadiusX = Math.min(260, w * 0.28);
+    const gatherRadiusY = Math.min(180, h * 0.28);
+
     // Dynamic flight speed curve:
     let speedFactor = 1.0;
     if (this.phase === 'BATTLE') {
@@ -542,29 +549,49 @@ export class GameEngine {
         f.speed = f.baseSpeed * currentScale;
       }
 
+      // 50 con cuối cùng tụ lại 1 vùng
+      if (isGathering50) {
+        const dxCenter = gatherCenterX - f.x;
+        const dyCenter = gatherCenterY - f.y;
+        const distCenter = Math.hypot(dxCenter, dyCenter);
+        if (distCenter > 140) {
+          const angleToCenter = Math.atan2(dyCenter, dxCenter);
+          let diff = angleToCenter - f.angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          f.angle += diff * Math.min(1.0, dt * 4.5 * currentScale);
+          f.speed = (f.baseSpeed + 28) * currentScale;
+        }
+      }
+
       f.vx = Math.cos(f.angle) * f.speed;
       f.vy = Math.sin(f.angle) * f.speed;
 
       f.x += f.vx * dt;
       f.y += f.vy * dt;
 
-      // Soft boundary bounce keeping clear of top HUD
-      if (f.x < padSide) {
-        f.x = padSide;
+      // Soft boundary bounce (Restricted into 1 region when 50 foxes gather)
+      const minX = isGathering50 ? Math.max(padSide, gatherCenterX - gatherRadiusX) : padSide;
+      const maxX = isGathering50 ? Math.min(w - padSide, gatherCenterX + gatherRadiusX) : w - padSide;
+      const minY = isGathering50 ? Math.max(padTop, gatherCenterY - gatherRadiusY) : padTop;
+      const maxY = isGathering50 ? Math.min(h - padBottom, gatherCenterY + gatherRadiusY) : h - padBottom;
+
+      if (f.x < minX) {
+        f.x = minX;
         f.targetAngle = (Math.random() - 0.5) * 1.2;
         f.angle = f.targetAngle;
-      } else if (f.x > w - padSide) {
-        f.x = w - padSide;
+      } else if (f.x > maxX) {
+        f.x = maxX;
         f.targetAngle = Math.PI + (Math.random() - 0.5) * 1.2;
         f.angle = f.targetAngle;
       }
 
-      if (f.y < padTop) {
-        f.y = padTop;
+      if (f.y < minY) {
+        f.y = minY;
         f.targetAngle = Math.PI / 2 + (Math.random() - 0.5) * 1.2;
         f.angle = f.targetAngle;
-      } else if (f.y > h - padBottom) {
-        f.y = h - padBottom;
+      } else if (f.y > maxY) {
+        f.y = maxY;
         f.targetAngle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
         f.angle = f.targetAngle;
       }
@@ -588,9 +615,9 @@ export class GameEngine {
     if (aliveLen <= 1) return;
 
     // =========================================================================
-    // STAGE 3: THE FINAL 0.2s - DECISIVE KNOCKOUT PUNCH (EXACTLY 1 SOLE WINNER)
+    // STAGE 4: THE FINAL 0.15s - DECISIVE KNOCKOUT PUNCH (EXACTLY 1 SOLE WINNER)
     // =========================================================================
-    if (timeLeft <= 0.2) {
+    if (timeLeft <= 0.15) {
       if (aliveLen > 1) {
         let champion = aliveFoxes[0];
         let runnerUp = aliveFoxes[1];
@@ -625,9 +652,9 @@ export class GameEngine {
     }
 
     // =========================================================================
-    // STAGE 2: 1v1 DUEL MODE (0.7s down to 0.2s: 2 FINALISTS PUNCH FLURRY)
+    // STAGE 3: 1v1 FINAL DUEL (0.35s down to 0.15s: 2 FINALISTS PUNCH FLURRY)
     // =========================================================================
-    if (aliveLen === 2 || timeLeft <= 0.7) {
+    if (aliveLen === 2 || timeLeft <= 0.35) {
       if (aliveLen > 2) {
         // Trim down cleanly to 2 finalists
         aliveFoxes.sort((a, b) => b.kills - a.kills);
@@ -657,7 +684,7 @@ export class GameEngine {
       // Proximity check for flurry punches
       const dx = f2.x - f1.x;
       const dy = f2.y - f1.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
       if (dist < 42) {
         // Trade punches with comic sparks!
@@ -678,15 +705,81 @@ export class GameEngine {
     }
 
     // =========================================================================
-    // STAGE 1: BRAWL PACING (CONTINUOUS SMOOTH CHARGE & CLASH ACROSS TIME)
+    // STAGE 2: 3-4 CÁO ĐẤM NHAU (TẦM 0.6s CHỈ CÒN 3-4 CON ĐẤM NHAU)
     // =========================================================================
-    const duelStartTime = Math.max(0.5, totalDuration - 0.7);
-    const initialCount = Math.max(2, this.foxes.length);
+    if (aliveLen <= 4 || timeLeft <= 0.6) {
+      if (aliveLen > 4) {
+        // Trim down cleanly to 4 top contenders
+        aliveFoxes.sort((a, b) => b.kills - a.kills);
+        for (let i = 4; i < aliveFoxes.length; i++) {
+          const victim = aliveFoxes[i];
+          victim.isAlive = false;
+          victim.eliminatedAt = t;
+          this.aliveCount--;
+          this.eliminationCount++;
+          this.addExplosion(victim.x, victim.y, false);
+        }
+        aliveFoxes.length = 4;
+        this.aliveCount = 4;
+      }
+
+      // 3 or 4 foxes all charge at each other fiercely!
+      for (let i = 0; i < aliveFoxes.length; i++) {
+        const foxA = aliveFoxes[i];
+        if (!foxA.isAlive) continue;
+
+        let nearestRival = null;
+        let minD = Infinity;
+        for (let j = 0; j < aliveFoxes.length; j++) {
+          if (i === j) continue;
+          const rival = aliveFoxes[j];
+          if (!rival.isAlive) continue;
+          const d = Math.hypot(rival.x - foxA.x, rival.y - foxA.y);
+          if (d < minD) {
+            minD = d;
+            nearestRival = rival;
+          }
+        }
+
+        if (nearestRival) {
+          foxA.targetId = nearestRival.id;
+          foxA.isCharging = true;
+          // Clash check
+          if (minD < 42 && foxA.punchTimer <= 0) {
+            foxA.punchTimer = 0.14;
+            nearestRival.punchTimer = 0.14;
+            const midX = (foxA.x + nearestRival.x) / 2;
+            const midY = (foxA.y + nearestRival.y) / 2;
+            const sfxWords = ['BỐP!', 'BAM!', 'CHÁT!', 'BÙM!'];
+            this.addClashEffect(midX, midY, sfxWords[Math.floor(Math.random() * sfxWords.length)]);
+            soundFX.playPunch();
+
+            // Chance to drop down from 4 to 3
+            if (aliveFoxes.length > 3 && Math.random() < 0.45) {
+              nearestRival.isAlive = false;
+              nearestRival.eliminatedAt = t;
+              this.aliveCount--;
+              this.eliminationCount++;
+              foxA.kills++;
+              this.addExplosion(nearestRival.x, nearestRival.y, false);
+              soundFX.playExplosion();
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    // =========================================================================
+    // STAGE 1: BRAWL PACING (CONTINUOUS SMOOTH CHARGE & CLASH DOWN TO 4 AT 0.6s)
+    // =========================================================================
+    const duelStartTime = Math.max(0.5, totalDuration - 0.6);
+    const initialCount = Math.max(4, this.foxes.length);
     const progress = Math.min(1.0, t / duelStartTime);
 
     // Target living count curve
     const remainingFactor = Math.pow(1 - progress, 1.35);
-    const targetPacedAlive = Math.max(2, Math.round(2 + (initialCount - 2) * remainingFactor));
+    const targetPacedAlive = Math.max(4, Math.round(4 + (initialCount - 4) * remainingFactor));
 
     // Assign targets to charge at
     for (let i = 0; i < aliveLen; i++) {

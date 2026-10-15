@@ -83,7 +83,7 @@ export default function GameCanvas({
   const battleBgImageRef = useRef(null);
 
   // Dynamic Camera Zoom & On-Map Celebration Particles
-  const cameraRef = useRef({ scale: 1.0, x: 0, y: 0 });
+  const cameraRef = useRef({ scale: 1.0, x: 0, y: 0, initialized: false });
   const celebrationParticlesRef = useRef([]);
 
   // Stable callback refs to ensure the render loop never restarts
@@ -184,6 +184,13 @@ export default function GameCanvas({
 
       engine.mapWidth = w;
       engine.mapHeight = h;
+
+      if (!cameraRef.current.initialized) {
+        cameraRef.current.scale = 1.0;
+        cameraRef.current.x = w / 2;
+        cameraRef.current.y = h / 2;
+        cameraRef.current.initialized = true;
+      }
     };
 
     updateCanvasSize();
@@ -247,9 +254,24 @@ export default function GameCanvas({
           targetScale = 2.15;
           targetFocusX = engine.winner.x;
           targetFocusY = engine.winner.y;
-        } else if (engine.aliveCount <= 5) {
-          // <= 5 Foxes or 1v1 duel: Dynamic close combat zoom (1.68x)
-          targetScale = 1.68;
+        } else if (engine.aliveCount <= 4) {
+          // 3-4 Con đâm nhau hoặc 1v1 duel: Dynamic close combat zoom (1.78x)
+          targetScale = 1.78;
+          let sumX = 0, sumY = 0, cnt = 0;
+          for (let i = 0; i < foxes.length; i++) {
+            if (foxes[i].isAlive) {
+              sumX += foxes[i].x;
+              sumY += foxes[i].y;
+              cnt++;
+            }
+          }
+          if (cnt > 0) {
+            targetFocusX = sumX / cnt;
+            targetFocusY = sumY / cnt;
+          }
+        } else if (engine.aliveCount <= 50) {
+          // 50 con cuối cùng tụ lại 1 vùng: ZOOM VÀO VÙNG TỤ NÀY (1.52x)!
+          targetScale = 1.52;
           let sumX = 0, sumY = 0, cnt = 0;
           for (let i = 0; i < foxes.length; i++) {
             if (foxes[i].isAlive) {
@@ -263,14 +285,12 @@ export default function GameCanvas({
             targetFocusY = sumY / cnt;
           }
         } else {
-          // Progress-based smooth zoom:
+          // Progress-based smooth zoom before reaching 50 foxes:
           const battleProgress = engine.battleTime / Math.max(1, engine.battleDuration);
           if (battleProgress >= 0.667) {
-            // Còn tầm 1/3 thời gian: zoom ~1.38x
-            targetScale = 1.38;
+            targetScale = 1.28;
           } else if (battleProgress >= 0.333) {
-            // Còn tầm 2/3 thời gian: zoom ~1.18x
-            targetScale = 1.18;
+            targetScale = 1.15;
           } else {
             targetScale = 1.0;
           }
@@ -298,12 +318,18 @@ export default function GameCanvas({
       const clampedTargetX = Math.max(halfW, Math.min(w - halfW, targetFocusX));
       const clampedTargetY = Math.max(halfH, Math.min(h - halfH, targetFocusY));
 
-      // Frame-rate independent smooth camera lerp
+      // Frame-rate independent smooth camera lerp (Stationary & locked in IDLE/LOBBY with zero drift!)
       const cam = cameraRef.current;
-      const lerpSpeed = Math.min(1.0, dt * 2.8);
-      cam.scale += (targetScale - cam.scale) * lerpSpeed;
-      cam.x += (clampedTargetX - cam.x) * lerpSpeed;
-      cam.y += (clampedTargetY - cam.y) * lerpSpeed;
+      if (phase === 'IDLE' || phase === 'LOBBY') {
+        cam.scale = 1.0;
+        cam.x = w / 2;
+        cam.y = h / 2;
+      } else {
+        const lerpSpeed = Math.min(1.0, dt * 2.8);
+        cam.scale += (targetScale - cam.scale) * lerpSpeed;
+        cam.x += (clampedTargetX - cam.x) * lerpSpeed;
+        cam.y += (clampedTargetY - cam.y) * lerpSpeed;
+      }
 
       // Base Canvas DPR Scale
       ctx.save();

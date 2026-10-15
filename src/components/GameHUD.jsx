@@ -100,6 +100,12 @@ export default function GameHUD({
               1V1 DUEL
             </span>
           )}
+          {aliveCount <= 4 && !isDuelMode && isBattle && (
+            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/30 text-amber-300 border border-amber-400 animate-pulse hidden md:inline-flex items-center gap-1">
+              <Swords className="w-3 h-3 text-amber-400" />
+              {aliveCount} CÁO ĐẤM NHAU
+            </span>
+          )}
           {isRapidFire && !isDuelMode && (
             <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/30 text-rose-300 border border-rose-400 animate-pulse hidden md:inline-flex items-center gap-1">
               <Zap className="w-3 h-3 text-rose-400" />
@@ -172,7 +178,14 @@ export default function GameHUD({
               {isDuelMode && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/30 text-amber-300 border border-amber-400 animate-pulse">
                   <Flame className="w-3 h-3 fill-current text-amber-400" />
-                  1V1 DUEL (0.2S CUỐI WINNER)
+                  1V1 DUEL (0.15S CUỐI WINNER)
+                </span>
+              )}
+
+              {aliveCount <= 4 && !isDuelMode && isBattle && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/30 text-amber-300 border border-amber-400 animate-pulse">
+                  <Swords className="w-3 h-3 fill-current text-amber-400" />
+                  TOP {aliveCount} ĐẤM NHAU TỔNG LỰC (0.6S)
                 </span>
               )}
 
