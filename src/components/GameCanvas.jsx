@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { soundFX } from '../utils/audio';
 
 // Cloudinary Image URLs
 const FOX_IMG_URL = 'https://res.cloudinary.com/ds11ggie4/image/upload/v1791990958/c%C3%A1o_bay-removebg-preview_sz7uol.png';
@@ -559,6 +560,7 @@ export default function GameCanvas({
     return () => {
       if (animId) cancelAnimationFrame(animId);
       window.removeEventListener('resize', updateCanvasSize);
+      soundFX.stopLobbyMusic();
     };
   }, [engine, isFullscreen]);
 

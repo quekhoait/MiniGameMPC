@@ -195,6 +195,9 @@ export class GameEngine {
       fox.isFinalist = false;
       fox.fireTimer = 0.2 + Math.random() * 0.9;
     });
+
+    // Start lobby background music according to configured lobby duration
+    soundFX.playLobbyMusic();
   }
 
   // Start Phase 2: Configured Battle duration
@@ -209,6 +212,9 @@ export class GameEngine {
     this.finalistIds = [];
     this.championId = null;
     this.finalShotFired = false;
+
+    // Stop lobby music and blast battle horn
+    soundFX.stopLobbyMusic();
     soundFX.playBattleStart();
   }
 
@@ -230,6 +236,7 @@ export class GameEngine {
     this.championId = null;
     this.finalShotFired = false;
     this.lastBeepSecond = -1;
+    soundFX.stopLobbyMusic();
 
     this.foxes.forEach((fox) => {
       fox.baseSpeed = 28 + Math.random() * 14;
@@ -254,6 +261,8 @@ export class GameEngine {
     if (this.phase === 'LOBBY') {
       this.lobbyTime += dt;
       const timeLeft = this.lobbyDuration - this.lobbyTime;
+      soundFX.updateLobbyMusic(timeLeft);
+
       if (timeLeft <= 3.05 && timeLeft > 0.05) {
         const sec = Math.ceil(timeLeft);
         if (sec !== this.lastBeepSecond) {

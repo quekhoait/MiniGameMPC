@@ -1,5 +1,7 @@
 // audio.js - High performance Web Audio API Sound FX for FOX BATTLE ROYALE
-// Procedural audio generation with zero external files, no memory leaks, strict throttling
+// Features procedural SFX and custom background music for lobby phase
+
+import lobbyMusicFile from '../assets/music.mp3';
 
 class SoundManager {
   constructor() {
@@ -8,6 +10,10 @@ class SoundManager {
     this.lastLaserTime = 0;
     this.lastExplosionTime = 0;
     this.lastBeepSecond = -1;
+
+    // Lobby Background Music (HTMLAudioElement for reliable playback & loop)
+    this.lobbyAudio = null;
+    this.lobbyBaseVolume = 0.55;
   }
 
   init() {
@@ -22,6 +28,18 @@ class SoundManager {
     }
   }
 
+  initLobbyAudio() {
+    if (this.lobbyAudio) return;
+    try {
+      this.lobbyAudio = new Audio(lobbyMusicFile || '/music.mp3');
+      this.lobbyAudio.loop = true;
+      this.lobbyAudio.volume = this.lobbyBaseVolume;
+      this.lobbyAudio.muted = this.isMuted;
+    } catch (e) {
+      console.warn('Lobby music init error', e);
+    }
+  }
+
   resume() {
     this.init();
     if (this.ctx && this.ctx.state === 'suspended') {
@@ -31,6 +49,51 @@ class SoundManager {
 
   setMuted(muted) {
     this.isMuted = muted;
+    if (this.lobbyAudio) {
+      this.lobbyAudio.muted = muted;
+    }
+  }
+
+  // Play lobby music starting at 0:00 according to configured lobby duration
+  playLobbyMusic() {
+    if (this.isMuted) return;
+    this.initLobbyAudio();
+    if (!this.lobbyAudio) return;
+
+    try {
+      this.lobbyAudio.currentTime = 0;
+      this.lobbyAudio.volume = this.lobbyBaseVolume;
+      this.lobbyAudio.muted = this.isMuted;
+      const playPromise = this.lobbyAudio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Lobby music playback prevented', err);
+        });
+      }
+    } catch (e) {
+      console.warn('Play lobby music error', e);
+    }
+  }
+
+  // Update lobby music volume (smoothly fades out in the last 2.5s of lobby)
+  updateLobbyMusic(timeLeft) {
+    if (!this.lobbyAudio || this.isMuted) return;
+    if (timeLeft <= 2.5 && timeLeft > 0) {
+      const factor = Math.max(0, timeLeft / 2.5);
+      this.lobbyAudio.volume = this.lobbyBaseVolume * factor;
+    } else if (timeLeft > 2.5) {
+      this.lobbyAudio.volume = this.lobbyBaseVolume;
+    }
+  }
+
+  // Stop lobby music completely (when battle starts or reset)
+  stopLobbyMusic() {
+    if (!this.lobbyAudio) return;
+    try {
+      this.lobbyAudio.pause();
+      this.lobbyAudio.currentTime = 0;
+      this.lobbyAudio.volume = this.lobbyBaseVolume;
+    } catch (e) {}
   }
 
   // Countdown Beep (1 beep per second in last 3s)
