@@ -1,7 +1,6 @@
 // FoxMascot.jsx - Flying Fox Mascot 2D sprite placed on the right side of the stage
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGrandDrawStore, PHASES } from '../store/useGrandDrawStore.js';
 
@@ -77,13 +76,12 @@ export default function FoxMascot() {
         />
       </mesh>
 
-      {/* Floating 3D Tooltip on hover */}
+      {/* Golden Aura Ring beneath mascot when hovered */}
       {isInteractive && isHovered && (
-        <Html position={[0, 1.25, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
-          <div className="bg-black/85 text-amber-200 border border-[#F2D28A]/80 px-3.5 py-1.5 rounded-xl text-xs font-['Cinzel',serif] tracking-wider shadow-[0_0_20px_rgba(242,210,138,0.4)] whitespace-nowrap backdrop-blur-md animate-bounce">
-            🦊 Cáo May Mắn • Chạm để quay!
-          </div>
-        </Html>
+        <mesh position={[0, -1.0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.55, 0.72, 32]} />
+          <meshBasicMaterial color="#FFDF6D" side={THREE.DoubleSide} transparent opacity={0.85} />
+        </mesh>
       )}
     </group>
   );
