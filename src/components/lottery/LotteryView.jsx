@@ -1,123 +1,48 @@
-// LotteryView.jsx - Complete 3D Lottery Game View Component
-import React, { useState, useEffect, useRef } from 'react';
-import { LotteryEngine } from '../../utils/lotteryEngine';
-import { lotteryAudio } from '../../utils/lotteryAudio';
-import LotteryCanvas3D from './LotteryCanvas3D';
-import LotteryControls from './LotteryControls';
-import WinnerAnnouncementModal from './WinnerAnnouncementModal';
-import HistoryDrawer from './HistoryDrawer';
-import StudentImportModal from './StudentImportModal';
+// LotteryView.jsx - Master View for GRAND DRAW Cinematic 3D Lottery Game
+import React, { useEffect } from 'react';
+import LotteryCanvas3D from './LotteryCanvas3D.jsx';
+import StageHUD from './ui/StageHUD.jsx';
+import EntryModal from './ui/EntryModal.jsx';
+import SettingsModal from './ui/SettingsModal.jsx';
+import HistoryModal from './ui/HistoryModal.jsx';
+import TicketReveal from './ui/TicketReveal.jsx';
+import { useGrandDrawStore } from './store/useGrandDrawStore.js';
+import { grandAudio } from './audio/grandDrawAudio.js';
 
-export default function LotteryView({ isFullscreen = false }) {
-  const engineRef = useRef(new LotteryEngine());
-  const engine = engineRef.current;
+export default function LotteryView({ isFullscreen = false, onBackToMenu }) {
+  const activeModal = useGrandDrawStore(state => state.activeModal);
 
-  const [gameState, setGameState] = useState(engine.getState());
-  const [isMuted, setIsMuted] = useState(false);
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
-
-  // Subscribe to engine state updates
+  // Initialize audio on first user interaction
   useEffect(() => {
-    const unsubscribe = engine.subscribe((state) => {
-      setGameState(state);
-      if (state.phase === 'ANNOUNCING' && state.currentWinner) {
-        setIsWinnerModalOpen(true);
-      }
-    });
-    return () => {
-      unsubscribe();
-      lotteryAudio.stopDrumSpin();
+    const handleGesture = () => {
+      grandAudio.ensureContext();
+      window.removeEventListener('pointerdown', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
     };
-  }, [engine]);
-
-  // Handle Mute toggle
-  const handleToggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    lotteryAudio.setMuted(nextMuted);
-  };
-
-  // Start spin
-  const handleStartSpin = () => {
-    setIsWinnerModalOpen(false);
-    engine.startSpin();
-  };
-
-  // Stop spin / choose ball
-  const handleStopSpin = () => {
-    engine.stopAndDrawWinner();
-  };
-
-  // Continue after winner reveal
-  const handleContinueAfterWinner = () => {
-    setIsWinnerModalOpen(false);
-    engine.confirmWinnerAndContinue();
-    if (gameState.remainingCount > 0) {
-      engine.startSpin();
-    }
-  };
-
-  // Save new student roster
-  const handleSaveStudents = (newStudents) => {
-    engine.setStudents(newStudents, true);
-  };
-
-  // Reset entire session
-  const handleResetSession = () => {
-    engine.resetSession();
-  };
+    window.addEventListener('pointerdown', handleGesture);
+    window.addEventListener('keydown', handleGesture);
+    return () => {
+      window.removeEventListener('pointerdown', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+      grandAudio.stopSpinMusic();
+    };
+  }, []);
 
   return (
-    <div className="w-full flex flex-col gap-3">
-      {/* 3D Canvas Battlefield for Lottery Balls */}
-      <div className="relative w-full">
-        <LotteryCanvas3D
-          engine={engine}
-          gameState={gameState}
-          onOpenWinnerModal={() => setIsWinnerModalOpen(true)}
-        />
+    <div className={`relative w-full ${isFullscreen ? 'h-screen' : 'h-[86vh] min-h-[640px]'} rounded-2xl overflow-hidden bg-[#07070A] border border-[#B8893B]/40 shadow-2xl flex flex-col`}>
+      {/* 3D Cinematic Scene */}
+      <div className="absolute inset-0 z-0">
+        <LotteryCanvas3D />
       </div>
 
-      {/* Control Toolbar */}
-      <LotteryControls
-        engine={engine}
-        gameState={gameState}
-        isMuted={isMuted}
-        onToggleMute={handleToggleMute}
-        onStartSpin={handleStartSpin}
-        onStopSpin={handleStopSpin}
-        onOpenImport={() => setIsImportOpen(true)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        onResetSession={handleResetSession}
-      />
+      {/* Stage HUD (Header cues, Menu exit button, prompt pill) */}
+      <StageHUD onBack={onBackToMenu} />
 
-      {/* Winner Announcement Hologram Modal */}
-      <WinnerAnnouncementModal
-        winner={gameState.currentWinner}
-        isOpen={isWinnerModalOpen}
-        onClose={() => setIsWinnerModalOpen(false)}
-        onContinue={handleContinueAfterWinner}
-        isAutoSpinning={gameState.isAutoSpinning}
-      />
-
-      {/* History Slide-out Drawer */}
-      <HistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={engine.history}
-        onResetSession={handleResetSession}
-      />
-
-      {/* Student List Import & Editor Modal */}
-      <StudentImportModal
-        isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
-        onSaveStudents={handleSaveStudents}
-        currentCount={gameState.totalStudents}
-      />
+      {/* 2D Overlay Modals */}
+      <EntryModal />
+      <SettingsModal />
+      <HistoryModal />
+      <TicketReveal />
     </div>
   );
 }
-

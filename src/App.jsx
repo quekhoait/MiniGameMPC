@@ -665,7 +665,10 @@ export default function App() {
         {/* ======================================================= */}
         {gameMode === 'LOTTERY' && (
           <div className="w-full">
-            <LotteryView isFullscreen={false} />
+            <LotteryView
+              isFullscreen={isFullscreen}
+              onBackToMenu={() => handleSelectGameMode('BATTLE')}
+            />
           </div>
         )}
 
