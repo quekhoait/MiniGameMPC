@@ -81,7 +81,7 @@ export default function EntryModal() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-serif font-bold text-[#F3E2C4] tracking-wide flex items-center gap-2">
+              <h2 className="text-xl font-['Cinzel',serif] font-bold text-[#F3E2C4] tracking-wide flex items-center gap-2">
                 GRAND DRAW — BẢNG DANH SÁCH THAM GIA
               </h2>
               <p className="text-xs text-amber-200/60 font-sans">
@@ -266,7 +266,7 @@ export default function EntryModal() {
             <button
               disabled={entries.length === 0}
               onClick={confirmEntriesAndPack}
-              className={`flex items-center gap-2.5 px-7 py-3 rounded-xl font-serif font-bold text-sm tracking-wider uppercase transition-all shadow-lg ${
+              className={`flex items-center gap-2.5 px-7 py-3 rounded-xl font-['Cinzel',serif] font-bold text-sm tracking-wider uppercase transition-all shadow-lg ${
                 entries.length > 0
                   ? 'bg-gradient-to-r from-[#C29643] via-[#E4B860] to-[#C29643] text-[#2C1D06] hover:brightness-110 shadow-amber-900/30 active:scale-95'
                   : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'

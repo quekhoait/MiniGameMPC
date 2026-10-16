@@ -1,14 +1,12 @@
-// Stage.jsx - Theatrical Grand Stage floor, custom backdrop image, footlights and atmosphere
+// Stage.jsx - Theatrical Grand Stage floor, 1:1 aspect ratio backdrop, footlights and atmosphere
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
 export default function Stage() {
-  // Load background artwork provided by user
+  // Load background artwork provided by user (800x800, 1:1 Aspect Ratio)
   const bgTexture = useMemo(() => {
     const loader = new THREE.TextureLoader();
     const tex = loader.load('/sticker_rutide.png');
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }, []);
@@ -19,9 +17,9 @@ export default function Stage() {
       <mesh position={[0, 0, 0]} receiveShadow>
         <cylinderGeometry args={[8.5, 9.2, 0.6, 64]} />
         <meshStandardMaterial
-          color="#221C18"
+          color="#201A16"
           roughness={0.4}
-          metalness={0.2}
+          metalness={0.18}
         />
       </mesh>
 
@@ -37,18 +35,32 @@ export default function Stage() {
 
       {/* Outer Lower Stage Floor */}
       <mesh position={[0, -0.4, 0]} receiveShadow>
-        <cylinderGeometry args={[22, 22, 0.4, 48]} />
+        <cylinderGeometry args={[24, 24, 0.4, 48]} />
         <meshStandardMaterial
-          color="#121014"
+          color="#0E0C10"
           roughness={0.7}
           metalness={0.15}
         />
       </mesh>
 
-      {/* ================= USER CUSTOM BACKDROP IMAGE ================= */}
-      {/* Positioned right behind the cage and stage archway */}
-      <mesh position={[0, 8.5, -7.4]}>
-        <planeGeometry args={[36, 22]} />
+      {/* Deep Theater Rear Wall */}
+      <mesh position={[0, 8, -7.5]} receiveShadow>
+        <planeGeometry args={[44, 26]} />
+        <meshStandardMaterial
+          color="#09080C"
+          roughness={0.85}
+        />
+      </mesh>
+
+      {/* ================= USER CUSTOM BACKDROP IMAGE (STRICT 1:1 SQUARE RATIO) ================= */}
+      {/* Golden Picture Frame Backing */}
+      <mesh position={[0, 7.5, -7.35]}>
+        <boxGeometry args={[17.2, 17.2, 0.08]} />
+        <meshStandardMaterial color="#C5942B" metalness={0.82} roughness={0.28} />
+      </mesh>
+      {/* Preserved 1:1 Image Plane */}
+      <mesh position={[0, 7.5, -7.3]}>
+        <planeGeometry args={[16.5, 16.5]} />
         <meshBasicMaterial
           map={bgTexture}
           toneMapped={false}
@@ -59,18 +71,18 @@ export default function Stage() {
       {/* Theater Archway Molding Trim Frame around backdrop */}
       <group position={[0, 5, -7.2]}>
         {/* Left Column */}
-        <mesh position={[-9.2, 0, 0]}>
-          <cylinderGeometry args={[0.35, 0.4, 15, 24]} />
+        <mesh position={[-9.8, 0, 0]}>
+          <cylinderGeometry args={[0.35, 0.4, 16, 24]} />
           <meshStandardMaterial color="#8A661E" roughness={0.4} metalness={0.7} />
         </mesh>
         {/* Right Column */}
-        <mesh position={[9.2, 0, 0]}>
-          <cylinderGeometry args={[0.35, 0.4, 15, 24]} />
+        <mesh position={[9.8, 0, 0]}>
+          <cylinderGeometry args={[0.35, 0.4, 16, 24]} />
           <meshStandardMaterial color="#8A661E" roughness={0.4} metalness={0.7} />
         </mesh>
         {/* Arch Header Bar */}
-        <mesh position={[0, 7.8, 0]}>
-          <boxGeometry args={[19, 0.6, 0.4]} />
+        <mesh position={[0, 8.4, 0]}>
+          <boxGeometry args={[20.4, 0.6, 0.4]} />
           <meshStandardMaterial color="#C5942B" roughness={0.4} metalness={0.7} />
         </mesh>
       </group>

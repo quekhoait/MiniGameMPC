@@ -1,6 +1,7 @@
 // LotteryCanvas3D.jsx - React Three Fiber Canvas with full Grand Draw Cinematic 3D Scene (Optimized & Lag-Free)
 import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import Stage from './scene/Stage.jsx';
 import Curtain from './scene/Curtain.jsx';
@@ -8,6 +9,7 @@ import Cage from './scene/Cage.jsx';
 import Balls from './scene/Balls.jsx';
 import EjectedBall from './scene/EjectedBall.jsx';
 import InteractiveProps from './scene/InteractiveProps.jsx';
+import FoxMascot from './scene/FoxMascot.jsx';
 import Lighting from './scene/Lighting.jsx';
 import CameraDirector from './scene/CameraDirector.jsx';
 import { useGrandDrawStore } from './store/useGrandDrawStore.js';
@@ -34,11 +36,20 @@ export default function LotteryCanvas3D() {
         <Suspense fallback={null}>
           <CameraDirector />
           <Lighting />
+          <ContactShadows
+            position={[0, -2.18, 0]}
+            opacity={0.65}
+            scale={22}
+            blur={2.4}
+            far={3.8}
+            color="#000000"
+          />
           <Stage />
           <Curtain phase={phase} />
           <Cage />
           <Balls />
           <EjectedBall />
+          <FoxMascot />
           <InteractiveProps />
         </Suspense>
       </Canvas>

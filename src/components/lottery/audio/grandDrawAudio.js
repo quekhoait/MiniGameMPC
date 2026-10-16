@@ -422,11 +422,11 @@ class GrandDrawAudio {
     });
   }
 
-  // Play spin music (/music.mp3)
+  // Play spin music (/music_quay.mp3 - music quay.mp3)
   playSpinMusic() {
     this.ensureContext();
     if (!this.spinMusicAudio) {
-      this.spinMusicAudio = new Audio('/music.mp3');
+      this.spinMusicAudio = new Audio('/music_quay.mp3');
       this.spinMusicAudio.loop = true;
     }
     const vol = this.isMuted ? 0 : (this.masterVolume * this.bgmVolume);

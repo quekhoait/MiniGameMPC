@@ -302,7 +302,7 @@ export const useGrandDrawStore = create((set, get) => ({
     }, 1200);
   },
 
-  // Proceed to next draw
+  // Proceed to next draw with ball drop ceremony
   nextDraw: () => {
     const { remainingPool } = get();
     if (remainingPool.length === 0) {
@@ -312,9 +312,26 @@ export const useGrandDrawStore = create((set, get) => ({
       });
     } else {
       set({
-        phase: PHASES.IDLE_READY,
-        currentWinner: null
+        currentWinner: null,
+        phase: PHASES.PACKING
       });
+
+      // Sound: sequence of ball drops
+      grandAudio.ensureContext();
+      for (let i = 0; i < 7; i++) {
+        setTimeout(() => {
+          grandAudio.playBallDrop(0.8 + Math.random() * 0.4);
+        }, 200 + i * 140);
+      }
+
+      setTimeout(() => {
+        set({ phase: PHASES.LOADING_CAGE });
+        grandAudio.playLidClank();
+
+        setTimeout(() => {
+          set({ phase: PHASES.IDLE_READY });
+        }, 750);
+      }, 1600);
     }
   },
 

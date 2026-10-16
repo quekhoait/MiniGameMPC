@@ -1,14 +1,13 @@
-// TicketReveal.jsx - Cinematic Gala Ticket Presentation Overlay
+// TicketReveal.jsx - Cinematic Royal Gala Ticket Presentation Overlay
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Trophy, ArrowRight, History, Edit3 } from 'lucide-react';
+import { Sparkles, Trophy, ArrowRight } from 'lucide-react';
 import { useGrandDrawStore, PHASES } from '../store/useGrandDrawStore.js';
 
 export default function TicketReveal() {
   const phase = useGrandDrawStore(state => state.phase);
   const currentWinner = useGrandDrawStore(state => state.currentWinner);
   const nextDraw = useGrandDrawStore(state => state.nextDraw);
-  const setActiveModal = useGrandDrawStore(state => state.setActiveModal);
   const remainingPool = useGrandDrawStore(state => state.remainingPool);
   const drawHistory = useGrandDrawStore(state => state.drawHistory);
 
@@ -19,8 +18,8 @@ export default function TicketReveal() {
     if (isVisible) {
       // Golden luxury burst
       confetti({
-        particleCount: 120,
-        spread: 80,
+        particleCount: 140,
+        spread: 85,
         origin: { y: 0.6 },
         colors: ['#D4AF37', '#FFDF6D', '#FF3B5C', '#E67E22', '#FFFFFF'],
         ticks: 240
@@ -56,34 +55,34 @@ export default function TicketReveal() {
   const currentTicketNum = drawHistory[0]?.ticketNumber || 1;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in pointer-events-auto">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in pointer-events-auto">
       <div className="w-full max-w-xl flex flex-col items-center">
-        {/* Parchment Ticket Card */}
-        <div className="w-full relative bg-[#F7F2E7] text-[#241A13] rounded-2xl p-7 shadow-2xl border-4 border-[#B8893B] overflow-hidden select-none animate-scale-up">
+        {/* Luxury Parchment Ticket Card with Royal Serif Typography */}
+        <div className="w-full relative bg-[#FBF7EE] text-[#1E1712] rounded-3xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] border-4 border-[#C5942B] overflow-hidden select-none animate-scale-up">
           {/* Inner Ornate Gold Stamped Border */}
-          <div className="absolute inset-2 border-2 border-[#C8A155]/60 rounded-xl pointer-events-none" />
-          <div className="absolute inset-3 border border-dashed border-[#C8A155]/40 rounded-lg pointer-events-none" />
+          <div className="absolute inset-2.5 border-2 border-[#C5942B]/70 rounded-2xl pointer-events-none" />
+          <div className="absolute inset-4 border border-dashed border-[#C5942B]/40 rounded-xl pointer-events-none" />
 
           {/* Ticket Header & Serial */}
-          <div className="flex items-center justify-between border-b border-[#C8A155]/50 pb-3 mb-5">
-            <div className="flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-[#B8893B]" />
-              <span className="font-serif font-black tracking-widest text-xs uppercase text-[#73531F]">
+          <div className="flex items-center justify-between border-b border-[#C5942B]/50 pb-4 mb-6">
+            <div className="flex items-center gap-2.5">
+              <Trophy className="w-5 h-5 text-[#C5942B]" />
+              <span className="font-['Cinzel',serif] font-black tracking-[0.25em] text-xs uppercase text-[#73531F]">
                 GRAND DRAW GALA
               </span>
             </div>
-            <div className="font-mono text-xs font-bold text-[#8C6627]">
+            <div className="font-mono text-xs font-bold text-[#8C6627] tracking-wider">
               № {String(currentTicketNum).padStart(5, '0')}
             </div>
           </div>
 
           {/* Ticket Body Content */}
-          <div className="text-center py-3">
-            <span className="inline-block px-3 py-1 rounded-full bg-[#B8893B]/20 text-[#6B4B15] font-serif text-xs font-semibold tracking-wider uppercase mb-2">
+          <div className="text-center py-4">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-[#C5942B]/20 text-[#6B4B15] font-['Cinzel',serif] text-xs font-bold tracking-[0.18em] uppercase mb-3 border border-[#C5942B]/40">
               {currentWinner.prize || 'Giải Thưởng May Mắn'}
             </span>
 
-            <h1 className="text-3xl sm:text-4xl font-serif font-black text-[#8B1A1A] tracking-tight mb-2 drop-shadow-sm">
+            <h1 className="text-3xl sm:text-4xl font-['Playfair_Display',serif] font-bold text-[#8B1A1A] tracking-normal mb-2 drop-shadow-sm leading-tight">
               {currentWinner.title}
             </h1>
 
@@ -94,50 +93,30 @@ export default function TicketReveal() {
             )}
 
             {/* Verification Watermark */}
-            <div className="mt-4 pt-3 border-t border-[#C8A155]/40 flex items-center justify-between text-[11px] text-[#735D4C] font-mono">
-              <span>ĐÃ XÁC THỰC KẾT QUẢ</span>
+            <div className="mt-5 pt-3.5 border-t border-[#C5942B]/40 flex items-center justify-between text-[11px] text-[#735D4C] font-mono">
+              <span className="tracking-wider">ĐÃ XÁC THỰC KẾT QUẢ</span>
               <span>{new Date().toLocaleTimeString('vi-VN')}</span>
-              <span>CÒN LẠI: {remainingPool.length} BÓNG</span>
+              <span className="font-bold text-[#8C6627]">CÒN LẠI {remainingPool.length} BÓNG</span>
             </div>
           </div>
 
           {/* Red Wax Seal Badge Detail */}
-          <div className="absolute -bottom-4 -right-4 w-18 h-18 rounded-full bg-[#8A161C] border-2 border-[#D4AF37] flex items-center justify-center text-white/90 shadow-lg rotate-12 pointer-events-none">
-            <Sparkles className="w-6 h-6 text-[#FFD700]" />
+          <div className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full bg-[#8A161C] border-2 border-[#D4AF37] flex items-center justify-center text-white/90 shadow-2xl rotate-12 pointer-events-none">
+            <Sparkles className="w-7 h-7 text-[#FFD700]" />
           </div>
         </div>
 
-        {/* Action Controls below Ticket */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 w-full">
-          {/* Continue Next Draw */}
+        {/* Action Controls below Ticket: ONLY KEEP "QUAY TIẾP" BUTTON AS REQUESTED */}
+        <div className="mt-8 flex justify-center w-full">
           <button
             onClick={nextDraw}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#B8893B] via-[#E5B860] to-[#B8893B] text-[#251806] font-serif font-bold text-sm tracking-wide shadow-xl hover:brightness-110 active:scale-95 transition-all"
+            className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-[#C5942B] via-[#F3CA68] to-[#C5942B] text-[#251806] font-['Cinzel',serif] font-black text-sm tracking-[0.15em] shadow-[0_10px_35px_rgba(197,148,43,0.45)] hover:brightness-110 active:scale-95 transition-all border border-[#FFE59E]/60 cursor-pointer"
           >
             QUAY TIẾP ({remainingPool.length} BÓNG CÒN LẠI)
-            <ArrowRight className="w-4 h-4" />
-          </button>
-
-          {/* View Draw History in Chest */}
-          <button
-            onClick={() => setActiveModal('HISTORY')}
-            className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1B1513]/90 hover:bg-[#2B211E] border border-amber-900/60 text-amber-200 text-sm font-medium transition-colors shadow-lg"
-          >
-            <History className="w-4 h-4 text-amber-400" />
-            Lịch Sử Đã Trúng
-          </button>
-
-          {/* Edit List */}
-          <button
-            onClick={() => setActiveModal('ENTRY')}
-            className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1B1513]/90 hover:bg-[#2B211E] border border-amber-900/60 text-amber-200 text-sm font-medium transition-colors shadow-lg"
-          >
-            <Edit3 className="w-4 h-4 text-amber-400" />
-            Soạn Danh Sách
+            <ArrowRight className="w-5 h-5 text-[#251806]" />
           </button>
         </div>
       </div>
     </div>
   );
 }
-

@@ -141,10 +141,18 @@ export default function InteractiveProps() {
           <primitive object={brassMaterial} />
         </mesh>
 
+        {/* Hover Highlight Ring around pedestal */}
+        {hoveredProp === 'RADIO' && (
+          <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.92, 1.02, 32]} />
+            <meshBasicMaterial color="#FFDF6D" side={THREE.DoubleSide} transparent opacity={0.85} />
+          </mesh>
+        )}
+
         {/* Floating 3D Label */}
         {hoveredProp === 'RADIO' && (
           <Html position={[0, 1.35, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
-            <div className="bg-amber-950/90 text-amber-200 border border-amber-500/60 px-3 py-1 rounded-md text-xs font-serif tracking-wider shadow-xl whitespace-nowrap backdrop-blur-sm animate-pulse">
+            <div className="bg-black/85 text-amber-200 border border-[#F2D28A]/80 px-3.5 py-1.5 rounded-xl text-xs font-['Cinzel',serif] tracking-wider shadow-[0_0_20px_rgba(242,210,138,0.4)] whitespace-nowrap backdrop-blur-md animate-pulse">
               📻 Cài Đặt Âm Thanh & Đồ Hoạ
             </div>
           </Html>
@@ -203,10 +211,18 @@ export default function InteractiveProps() {
           <primitive object={brassMaterial} />
         </mesh>
 
+        {/* Hover Highlight Ring around pedestal */}
+        {hoveredProp === 'CLIPBOARD' && (
+          <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.92, 1.02, 32]} />
+            <meshBasicMaterial color="#FFDF6D" side={THREE.DoubleSide} transparent opacity={0.85} />
+          </mesh>
+        )}
+
         {/* Floating 3D Label */}
         {hoveredProp === 'CLIPBOARD' && (
           <Html position={[0, 1.4, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
-            <div className="bg-amber-950/90 text-amber-200 border border-amber-500/60 px-3 py-1 rounded-md text-xs font-serif tracking-wider shadow-xl whitespace-nowrap backdrop-blur-sm animate-pulse">
+            <div className="bg-black/85 text-amber-200 border border-[#F2D28A]/80 px-3.5 py-1.5 rounded-xl text-xs font-['Cinzel',serif] tracking-wider shadow-[0_0_20px_rgba(242,210,138,0.4)] whitespace-nowrap backdrop-blur-md animate-pulse">
               📋 Soạn Danh Sách Người Tham Gia
             </div>
           </Html>
@@ -265,10 +281,18 @@ export default function InteractiveProps() {
           </mesh>
         )}
 
+        {/* Hover Highlight Ring around Chest base */}
+        {hoveredProp === 'CHEST' && (
+          <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.65, 0.75, 32]} />
+            <meshBasicMaterial color="#FFDF6D" side={THREE.DoubleSide} transparent opacity={0.85} />
+          </mesh>
+        )}
+
         {/* Floating 3D Label */}
         {hoveredProp === 'CHEST' && (
           <Html position={[0, 1.15, 0]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
-            <div className="bg-amber-950/90 text-amber-200 border border-amber-500/60 px-3 py-1 rounded-md text-xs font-serif tracking-wider shadow-xl whitespace-nowrap backdrop-blur-sm animate-pulse">
+            <div className="bg-black/85 text-amber-200 border border-[#F2D28A]/80 px-3.5 py-1.5 rounded-xl text-xs font-['Cinzel',serif] tracking-wider shadow-[0_0_20px_rgba(242,210,138,0.4)] whitespace-nowrap backdrop-blur-md animate-pulse">
               🧰 Rương Vé Đã Rút ({drawHistory.length})
             </div>
           </Html>

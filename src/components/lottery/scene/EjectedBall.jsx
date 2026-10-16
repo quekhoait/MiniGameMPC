@@ -98,12 +98,12 @@ export default function EjectedBall() {
     const time = state.clock.getElapsedTime();
 
     if (phase === PHASES.DISPENSING) {
-      // 1. Sliding down the chute to velvet tray
+      // 1. Sliding down the chute smoothly to velvet tray cushion
       dispenseProgressRef.current = THREE.MathUtils.damp(dispenseProgressRef.current, 1, 3.2, delta);
       const t = dispenseProgressRef.current;
       groupRef.current.position.x = 0;
-      groupRef.current.position.y = THREE.MathUtils.lerp(-1.25, -2.15, t);
-      groupRef.current.position.z = THREE.MathUtils.lerp(0.8, 2.45, t);
+      groupRef.current.position.y = THREE.MathUtils.lerp(-1.0, -1.58, t);
+      groupRef.current.position.z = THREE.MathUtils.lerp(1.0, 2.45, t);
 
       // Keep solid sphere aligned down the chute
       if (ballBodyRef.current) {
@@ -111,8 +111,8 @@ export default function EjectedBall() {
         ballBodyRef.current.rotation.y = 0;
       }
     } else if (phase === PHASES.BALL_PRESENTED) {
-      // 2. On velvet tray: solid sphere rotates 45 degrees (Math.PI / 4)
-      groupRef.current.position.set(0, -2.15, 2.45);
+      // 2. On velvet tray cushion: rests flush at Y = -1.58, solid sphere rotates 45 degrees
+      groupRef.current.position.set(0, -1.58, 2.45);
       settleRotateProgressRef.current = THREE.MathUtils.damp(settleRotateProgressRef.current, 1, 3.5, delta);
       const rotT = settleRotateProgressRef.current;
 
@@ -129,7 +129,7 @@ export default function EjectedBall() {
       }
     } else {
       // OPENING or TICKET_SHOWN
-      groupRef.current.position.set(0, -2.15, 2.45);
+      groupRef.current.position.set(0, -1.58, 2.45);
       if (ballBodyRef.current) {
         ballBodyRef.current.rotation.x = 0;
         ballBodyRef.current.rotation.y = Math.PI / 4;
@@ -169,7 +169,7 @@ export default function EjectedBall() {
   return (
     <group
       ref={groupRef}
-      position={[0, -2.15, 2.45]}
+      position={[0, -1.58, 2.45]}
       onClick={(e) => {
         e.stopPropagation();
         if (isInteractive) openBall();
@@ -275,7 +275,7 @@ export default function EjectedBall() {
 
       {/* Pulsating golden aura ring beneath ball on tray */}
       {isInteractive && (
-        <group ref={glowRingRef} position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <group ref={glowRingRef} position={[0, -0.34, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.36, 0.52, 32]} />
           <meshBasicMaterial
             color={isHovered ? '#FFFFFF' : '#FFD700'}
